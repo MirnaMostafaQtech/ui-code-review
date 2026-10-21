@@ -109,8 +109,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/s
 ```
 
 It prints the count per reviewer and a warning for every finding it had to drop (file not in the
-review, no line number, or a finding its own text calls not a defect, optional or unverified);
-mention those drops to the user in Step 5.
+review, no line number, a message that calls the finding not a defect or unverified, or a fix that
+starts with "none" or "optional"); mention those drops to the user in Step 5.
 
 ## Step 5: Preview, ask, then publish
 
