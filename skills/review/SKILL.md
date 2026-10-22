@@ -28,19 +28,34 @@ All scripts are Windows PowerShell; run them as
 
 ## Step 1: Build the review target
 
-Output folder: `<OutDir>` = `%TEMP%\ui-code-review\<kind>-<id>`. Delete it first if it exists.
+Output folder: `<OutDir>` = `%TEMP%\ui-code-review\<kind>-<id>-<yyyyMMdd-HHmmss>`, a new folder for every
+run (use the current time). Never reuse or delete another run's folder: another review of the same
+target may be using it.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Get-ReviewTarget.ps1" -Kind pr -Id <id> -RepoRoot "<repo root>" -OutDir "<OutDir>"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Get-ReviewTarget.ps1" -Kind changeset -Id <id> -CollectionUrl "<collection url>" -OutDir "<OutDir>"
 ```
 
+**One review per target at a time.** The script takes a lock for the PR / changeset. If it fails with
+`REVIEW-LOCKED`, another review of the same target is running: tell the user when it started and stop.
+Don't retry and don't touch that run's folder. Run again with `-Force` only if the user confirms that
+review is no longer running (for example a window that was closed mid-review). A lock older than 2
+hours is taken over automatically.
+
+From here on, the review holds the lock until it ends. **Every way the review ends** (Step 5 done,
+the user declines, a large change they don't want, an error after Step 1) finishes with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Release-ReviewLock.ps1" -OutDir "<OutDir>"
+```
+
 Read `<OutDir>/target.json`. Each entry in `files` has `path` (repo or server path), `contentFile` (the
 full new file on disk) and `changedLines` (new-side line ranges). If `files` is empty, tell the user
-there are no changed UI files and stop.
+there are no changed UI files and stop (the script has already released the lock).
 
 **Large change:** if `files` has more than 40 entries, tell the user how many UI files are in scope and
-ask whether to review all of them before going on. Stop if they say no.
+ask whether to review all of them before going on. If they say no, release the lock and stop.
 
 ## Step 2: Decide which reviewers run
 
@@ -128,7 +143,8 @@ exactly as they would be posted) and `<OutDir>/report.md` (the summary comment).
 - the summary counts, and the findings that appear in the summary only (Info, and Warnings beyond the
   limit).
 
-With `--dry-run`, stop here. Otherwise ask the user whether to post, and where (the PR / changeset).
+With `--dry-run`, release the lock and stop here. Otherwise ask the user whether to post, and where
+(the PR / changeset); if they decide not to post, release the lock and stop.
 If they want changes first (drop a comment, change wording), edit `<OutDir>/findings.json` (not the
 reviews), run 5a again and show the new preview.
 
@@ -142,8 +158,8 @@ reviews), run 5a again and show the new preview.
 Nothing is posted twice: a re-run skips comments already there, and posts a new summary / work item
 comment only when the findings changed.
 
-## Step 6: Answer the user
+## Step 6: Release the lock and answer the user
 
-After posting, say where the comments went (PR link / changeset link / work item) and how many were
+Release the lock (Step 1). Then say where the comments went (PR link / changeset link / work item) and how many were
 posted or already there, and list anything skipped (a reviewer that didn't run, comments that
 failed to post). Keep it short; the details are in the comments.

@@ -17,7 +17,8 @@
 
     Comment selection:
       - every Error and every Warning gets its own inline comment where it is (at most $MaxWarnings
-        Warnings; the rest are listed in the summary only); Info goes to the summary only;
+        Warnings, chosen by priority: accessibility, then AXIS, then Angular, one per rule in turn;
+        the rest are listed in the summary only); Info goes to the summary only;
       - findings on the same line are merged into one comment.
 #>
 param(
@@ -106,15 +107,21 @@ $kept = @($kept | Sort-Object { $severityRank[$_.severity] }, file, line)
 
 # ---------- 2. choose what becomes an inline comment ----------
 
-$inline = @()
+# Every Error. Warnings by priority up to $MaxWarnings: accessibility first, then AXIS, then Angular,
+# taking one finding per rule in turn so a single repeated rule can't fill every slot.
+$inline = @($kept | Where-Object { $_.severity -eq 'Error' })
+$ruleFamilyRank = { param($ruleId) if ($ruleId -like 'A11Y-*') { 0 } elseif ($ruleId -like 'R-*') { 1 } else { 2 } }
+$warningQueues = @($kept | Where-Object { $_.severity -eq 'Warning' } |
+    Group-Object ruleId | Sort-Object { & $ruleFamilyRank $_.Name }, Name |
+    ForEach-Object { , @($_.Group) })
 $warningCount = 0
-foreach ($f in $kept) {
-    if ($f.severity -eq 'Info') { continue }
-    if ($f.severity -eq 'Warning') {
-        if ($warningCount -ge $MaxWarnings) { continue }
-        $warningCount++
+for ($round = 0; $warningCount -lt $MaxWarnings; $round++) {
+    $took = $false
+    foreach ($queue in $warningQueues) {
+        if ($warningCount -ge $MaxWarnings) { break }
+        if ($round -lt $queue.Count) { $inline += $queue[$round]; $warningCount++; $took = $true }
     }
-    $inline += $f
+    if (-not $took) { break }
 }
 
 # One comment per (file, line).
@@ -156,7 +163,7 @@ else {
     $notInline = $counts.Warning - $warningCount
     if ($notInline -gt 0) {
         [void]$sb.AppendLine()
-        [void]$sb.AppendLine("$notInline Warning(s) beyond the first $MaxWarnings are listed here only, without an inline comment.")
+        [void]$sb.AppendLine("$notInline Warning(s) beyond the $MaxWarnings highest-priority ones are listed here only, without an inline comment.")
     }
 }
 [void]$sb.AppendLine()

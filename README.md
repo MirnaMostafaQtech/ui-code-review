@@ -54,7 +54,17 @@ Get-ReviewTarget     by file type and       AXIS, Angular,          Merge-      
                      a11y pre-scan          a11y areas              Findings
 ```
 
-All working files go to `%TEMP%\ui-code-review\<pr|changeset>-<id>\`.
+Every run writes its working files to its own folder,
+`%TEMP%\ui-code-review\<pr|changeset>-<id>-<yyyyMMdd-HHmmss>\`. Folders of the same PR or changeset
+older than 7 days are deleted at the start of a run.
+
+### One review per PR or changeset at a time
+
+Step 1 takes a lock, `%TEMP%\ui-code-review\<pr|changeset>-<id>.lock`, and the review releases it when
+it ends (`scripts/Release-ReviewLock.ps1`). A second review of the same PR or changeset started in the
+meantime stops with `REVIEW-LOCKED` and says when the first one started, instead of overwriting its
+results. A lock older than 2 hours is treated as left behind by a review that didn't finish and is
+taken over; for a younger one, the review asks you first and then takes it over with `-Force`.
 
 ### 1. Build the review target: `scripts/Get-ReviewTarget.ps1`
 
@@ -123,8 +133,9 @@ Which findings become comments:
 
 - Only findings on changed lines are kept.
 - Every Error gets an inline comment.
-- Warnings get inline comments up to `-MaxWarnings` (15 by default). Any beyond that appear in the
-  summary only.
+- Warnings get inline comments up to `-MaxWarnings` (15 by default), chosen by priority:
+  accessibility first, then AXIS, then Angular, taking one finding per rule in turn so one repeated
+  rule can't fill every slot. Any beyond that appear in the summary only.
 - Info appears in the summary only.
 - Findings on the same line share one comment.
 
@@ -168,9 +179,12 @@ ui-code-review/
 ├─ scripts/
 │  ├─ Get-ReviewTarget.ps1        step 1
 │  ├─ Merge-Findings.ps1          step 4
-│  └─ Publish-Findings.ps1        step 5
+│  ├─ Publish-Findings.ps1        step 5
+│  └─ Release-ReviewLock.ps1      ends the review: releases the lock
 ├─ scm-adapters/                  Git, TFVC, PR and work item API helpers
-└─ common/tfs-auth.ps1            TFS PAT authentication header
+└─ common/
+   ├─ tfs-auth.ps1                TFS PAT authentication header
+   └─ review-lock.ps1             one review per PR / changeset at a time
 ```
 
 ## Troubleshooting
@@ -182,6 +196,7 @@ ui-code-review/
 | `401 Unauthorized` on changeset comments | The PAT can't comment on changesets in that collection. The review falls back to the work item; to comment on the changeset itself, extend the PAT's permissions. |
 | AXIS skipped | `skills/axis-scss/docs` is missing from the installed plugin. Reinstall it from the full package. |
 | An accessibility area skipped | `agents/accessibility-*.md` or `references/` is missing from the installed plugin. Reinstall it from the full package. |
+| `REVIEW-LOCKED` | Another review of the same PR or changeset is running. Wait for it to finish. If it isn't running any more (its window was closed mid-review), tell the review so and it takes the lock over with `-Force`. |
 
 ## Known limits
 

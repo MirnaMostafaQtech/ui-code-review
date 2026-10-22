@@ -15,6 +15,12 @@
         Get-ReviewTarget.ps1 -Kind pr        -Id 123   -RepoRoot D:\repo           -OutDir <dir>
         Get-ReviewTarget.ps1 -Kind changeset -Id 31554 -CollectionUrl https://tfs25.alqemam.com/qCollection -OutDir <dir>
 
+    OutDir is a new folder per run (<root>/<kind>-<id>-<yyyyMMdd-HHmmss>). The script takes the
+    target's review lock first (common/review-lock.ps1) and fails with REVIEW-LOCKED if another run
+    holds it; -Force takes over a lock whose run is no longer going. The lock is released here on
+    failure or when no UI file changed, otherwise by Release-ReviewLock.ps1 at the end of the review.
+    Run folders of the same target older than 7 days are deleted.
+
     PAT: $env:SONARTOOLKIT_TFS_PAT (process or user scope) - same variable as q-ai-quality-review.
 #>
 param(
@@ -22,7 +28,8 @@ param(
     [Parameter(Mandatory)][int]$Id,
     [Parameter(Mandatory)][string]$OutDir,
     [string]$RepoRoot = (Get-Location).Path,
-    [string]$CollectionUrl
+    [string]$CollectionUrl,
+    [switch]$Force
 )
 
 Set-StrictMode -Version Latest
@@ -32,6 +39,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../scm-adapters/tfs-workitem-adapter.ps1')
 . (Join-Path $PSScriptRoot '../scm-adapters/tfs-pullrequest-adapter.ps1')
 . (Join-Path $PSScriptRoot '../scm-adapters/tfvc-adapter.ps1')
+. (Join-Path $PSScriptRoot '../common/review-lock.ps1')
 
 $UiFilePattern = '\.(html|scss|css|ts|cshtml|js)$'
 $SkipPattern = '(\.min\.(css|js)$)|(\.spec\.ts$)|(\.d\.ts$)|(/node_modules/)|(/dist/)|(/bin/)|(/obj/)'
@@ -39,6 +47,19 @@ $SkipPattern = '(\.min\.(css|js)$)|(\.spec\.ts$)|(\.d\.ts$)|(/node_modules/)|(/d
 $pat = $env:SONARTOOLKIT_TFS_PAT
 if (-not $pat) { $pat = [Environment]::GetEnvironmentVariable('SONARTOOLKIT_TFS_PAT', 'User') }
 if (-not $pat) { throw 'Get-ReviewTarget: SONARTOOLKIT_TFS_PAT is not set.' }
+
+# A trap covers the whole script, so it releases only once this run holds the lock.
+$lockHeld = $false
+trap { if ($lockHeld) { Exit-ReviewLock -OutDir $OutDir }; break }
+
+if (Test-Path -LiteralPath $OutDir) { throw "Get-ReviewTarget: $OutDir already exists; every run needs a new folder." }
+Enter-ReviewLock -Kind $Kind -Id $Id -OutDir $OutDir -Force:$Force
+$lockHeld = $true
+
+$runRoot = Split-Path -Parent $OutDir
+foreach ($old in @(Get-ChildItem -LiteralPath $runRoot -Directory -Filter "$Kind-$Id-*")) {
+    if ($old.LastWriteTime -lt (Get-Date).AddDays(-7)) { Remove-Item -LiteralPath $old.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+}
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $filesDir = Join-Path $OutDir 'files'
@@ -213,4 +234,6 @@ else {
 Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 $targetFile = Join-Path $OutDir 'target.json'
 [IO.File]::WriteAllText($targetFile, ($target | ConvertTo-Json -Depth 6), $utf8NoBom)
+# Nothing to review means the review ends here, so it doesn't keep the lock.
+if (@($files).Count -eq 0) { Exit-ReviewLock -OutDir $OutDir }
 Write-Output "Review target: $($target.kind) $Id - $(@($files).Count) UI file(s) in scope -> $targetFile"
