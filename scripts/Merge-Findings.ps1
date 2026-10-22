@@ -147,14 +147,20 @@ foreach ($file in (Get-ChildItem -LiteralPath $reviewDir -Filter '*.txt' | Sort-
         }
     }
     else {
-        foreach ($f in (Get-JsonBlock $text)) {
+        # One unreadable reply must not lose the other reviewers' findings.
+        try { $jsonFindings = Get-JsonBlock $text }
+        catch { $dropped += "${name}: reply is not a JSON findings array, all of it skipped ($($_.Exception.Message))"; continue }
+        foreach ($f in $jsonFindings) {
             $path = Resolve-TargetPath "$($f.file)"
             if (-not $path) { $dropped += "${name}: file '$($f.file)' not in this review"; continue }
+            # line may come as a number, a string or a range such as "12-14": use its first number.
+            $lineMatch = [regex]::Match("$($f.line)", '\d+')
+            if (-not $lineMatch.Success) { $dropped += "${name}: $($f.ruleId) in $path has no line number ('$($f.line)')"; continue }
             $all += [pscustomobject]@{
                 ruleId   = "$($f.ruleId)"
                 severity = "$($f.severity)"
                 file     = $path
-                line     = [int]$f.line
+                line     = [int]$lineMatch.Value
                 message  = "$($f.message)".Trim()
                 fix      = "$($f.fix)".Trim()
                 reviewer = $name

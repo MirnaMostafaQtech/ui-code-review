@@ -410,7 +410,8 @@ function Invoke-TfvcChangesetChangesRequest {
 function Get-TfvcChangesetChanges {
     <#
         Returns the files touched by one TFVC changeset, as [pscustomobject]@{ServerPath;
-        ChangeType}. Confirmed, from the official Azure DevOps REST API reference, to exist under
+        ChangeType; SourceServerPath}. SourceServerPath is the path before a rename (the API's
+        sourceServerItem), else $null. Confirmed, from the official Azure DevOps REST API reference, to exist under
         the on-prem "azure-devops-server-rest-*" API versions (5.0/6.0/7.0/7.1), not just cloud
         dev.azure.com - the same standard already applied to every other TFS REST call in this
         toolkit (scm-adapters/tfs-pullrequest-adapter.ps1).
@@ -434,9 +435,11 @@ function Get-TfvcChangesetChanges {
 
     $changes = @()
     foreach ($entry in @($response.value)) {
+        $source = if ($entry.PSObject.Properties['sourceServerItem']) { "$($entry.sourceServerItem)" } else { '' }
         $changes += [pscustomobject]@{
-            ServerPath = $entry.item.path
-            ChangeType = "$($entry.changeType)"
+            ServerPath       = $entry.item.path
+            ChangeType       = "$($entry.changeType)"
+            SourceServerPath = if ($source) { $source } else { $null }
         }
     }
     return ,@($changes)

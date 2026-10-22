@@ -150,8 +150,8 @@ re-run):
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Merge-Findings.ps1" -OutDir "<OutDir>"
 ```
 
-It prints the count per reviewer and a warning for every finding it had to drop (file not in the
-review, no line number, a message that calls the finding not a defect or unverified, or a fix that
+It prints the count per reviewer and a warning for every finding it had to drop (a reply that is not
+a JSON array, file not in the review, no line number, a message that calls the finding not a defect or unverified, or a fix that
 starts with "none" or "optional"); mention those drops to the user in Step 5.
 
 ## Step 5: Preview, ask, then publish

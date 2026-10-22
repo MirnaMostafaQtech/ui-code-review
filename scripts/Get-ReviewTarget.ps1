@@ -176,8 +176,17 @@ if ($Kind -eq 'changeset') {
             $ranges = Get-WholeFileRange $newText
         }
         else {
-            $oldText = ConvertFrom-Utf8Bytes (Invoke-TfsBytes "$itemUri&versionDescriptor.version=$($Id - 1)")
-            $ranges = Get-LineRangesBetween -OldText $oldText -NewText $newText
+            # A renamed file had its old path at the previous version.
+            $oldPath = if ($change.SourceServerPath) { $change.SourceServerPath } else { $change.ServerPath }
+            $oldUri = "$CollectionUrl/_apis/tfvc/items?path=$([Uri]::EscapeDataString($oldPath))&versionDescriptor.versionType=Changeset&versionDescriptor.version=$($Id - 1)&includeContent=true&api-version=5.0"
+            try {
+                $oldText = ConvertFrom-Utf8Bytes (Invoke-TfsBytes $oldUri)
+                $ranges = Get-LineRangesBetween -OldText $oldText -NewText $newText
+            }
+            catch {
+                Write-Warning "Get-ReviewTarget: no previous version of $oldPath ($($_.Exception.Message)); reviewing the whole file."
+                $ranges = Get-WholeFileRange $newText
+            }
         }
         if ($ranges.Count -eq 0) { continue }
 
@@ -270,7 +279,11 @@ else {
             $ranges = Get-WholeFileRange ([IO.File]::ReadAllText($contentFile, [Text.Encoding]::UTF8))
         }
         else {
-            $diff = & git -C $RepoRoot -c core.quotepath=false diff --no-color -U0 -M --ignore-cr-at-eol $base $head -- $path
+            # A rename needs both paths in the pathspec, or git sees only the new one and diffs it as
+            # an added file (every line changed).
+            $pathspec = @($path)
+            if ($status -like 'R*' -or $status -like 'C*') { $pathspec = @($parts[1], $path) }
+            $diff = & git -C $RepoRoot -c core.quotepath=false diff --no-color -U0 -M --ignore-cr-at-eol $base $head -- $pathspec
             $ranges = Get-ChangedLineRanges -DiffLines @($diff)
         }
         if ($ranges.Count -eq 0) { continue }

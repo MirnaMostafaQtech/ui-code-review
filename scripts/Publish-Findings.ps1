@@ -46,9 +46,13 @@ $marker = 'ui-review'
 
 # ---------- helpers ----------
 
-function Get-Fingerprint([string]$RuleId, [string]$Path, [string]$LineText) {
+# Occurrence tells apart lines with the same text (two identical <input> lines): it is how many lines
+# above have that text. The first occurrence hashes as before, so fingerprints already posted still match.
+function Get-Fingerprint([string]$RuleId, [string]$Path, [string]$LineText, [int]$Occurrence = 0) {
     $sha = [Security.Cryptography.SHA256]::Create()
-    $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes("$RuleId|$Path|$($LineText.Trim())"))
+    $key = "$RuleId|$Path|$($LineText.Trim())"
+    if ($Occurrence -gt 0) { $key = "$key|$Occurrence" }
+    $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($key))
     return ([BitConverter]::ToString($bytes) -replace '-', '').Substring(0, 16).ToLower()
 }
 
@@ -93,6 +97,10 @@ foreach ($finding in $rawFindings) {
     }
     $lines = $lineCache[$file.path]
     $lineText = if ($line -le $lines.Count) { $lines[$line - 1] } else { '' }
+    $occurrence = 0
+    for ($i = 0; $i -lt [Math]::Min($line - 1, $lines.Count); $i++) {
+        if ($lines[$i].Trim() -ceq $lineText.Trim()) { $occurrence++ }
+    }
 
     $kept += [pscustomobject]@{
         ruleId      = "$($finding.ruleId)"
@@ -101,7 +109,7 @@ foreach ($finding in $rawFindings) {
         line        = $line
         message     = "$($finding.message)"
         fix         = "$($finding.fix)"
-        fingerprint = Get-Fingerprint $finding.ruleId $file.path $lineText
+        fingerprint = Get-Fingerprint $finding.ruleId $file.path $lineText $occurrence
     }
 }
 $kept = @($kept | Sort-Object { $severityRank[$_.severity] }, file, line)
