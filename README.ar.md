@@ -27,16 +27,33 @@
 
 ## التثبيت
 
-مرة واحدة على الجهاز، من الفولدر اللي فيه `.claude-plugin/marketplace.json`:
+الريبو ده هو نفسه marketplace للبلاجن، واسمه `ui-review`. مرة واحدة على الجهاز، ضيفيه من GitHub على طول وثبّتي البلاجن:
 
 </div>
 
 ```
-/plugin marketplace add <path to that folder>
-/plugin install ui-code-review@ui-review-local
+claude plugin marketplace add MirnaMostafaQtech/ui-code-review
+claude plugin install ui-code-review@ui-review
 ```
 
 <div dir="rtl">
+
+أو من نسخة الريبو اللي على جهازك: `claude plugin marketplace add <مسار الريبو>`، وبعدين نفس أمر التثبيت. وبعد كده اقفلي Claude Code وافتحيه. ونفس الأوامر شغالة من جوه Claude Code كـ `/plugin marketplace add ...` و `/plugin install ...`.
+
+### التحديث
+
+Claude Code بيشغّل نسخة من البلاجن اتعملت وقت التثبيت، مش الريبو نفسه. فأي تعديل مش بيوصلك غير لما تحدّثي:
+
+</div>
+
+```
+claude plugin marketplace update ui-review
+claude plugin update ui-code-review@ui-review
+```
+
+<div dir="rtl">
+
+وبعدين اقفلي Claude Code وافتحيه. **ولما تعدلي في البلاجن، لازم تكبّري رقم `version` في `.claude-plugin/plugin.json`**، لأن التحديث مش بيثبّت حاجة لو رقم النسخة زي ما هو.
 
 ## الاستخدام
 

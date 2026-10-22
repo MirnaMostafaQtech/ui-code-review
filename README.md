@@ -25,13 +25,30 @@ Nothing is posted until you approve the preview. Everything the review needs shi
 
 ## Install
 
-Once per machine, from the folder that holds `.claude-plugin/marketplace.json` (the folder above this
-one):
+This repository is its own plugin marketplace, `ui-review`. Once per machine, add it straight from
+GitHub and install the plugin:
 
 ```
-/plugin marketplace add <path to that folder>
-/plugin install ui-code-review@ui-review-local
+claude plugin marketplace add MirnaMostafaQtech/ui-code-review
+claude plugin install ui-code-review@ui-review
 ```
+
+Or from a local clone: `claude plugin marketplace add <path to the clone>`, then the same install.
+Restart Claude Code afterwards. Inside Claude Code the same commands work as `/plugin marketplace add
+...` and `/plugin install ...`.
+
+### Update
+
+Claude Code runs an installed copy of the plugin, not the repository, so changes reach you only
+through an update:
+
+```
+claude plugin marketplace update ui-review
+claude plugin update ui-code-review@ui-review
+```
+
+Then restart Claude Code. **When you change the plugin, raise `version` in
+`.claude-plugin/plugin.json`**: an update with the same version number installs nothing.
 
 The bundled AXIS skill shows up as `ui-code-review:axis-scss`, and the accessibility agents as
 `ui-code-review:accessibility-*`.
@@ -172,7 +189,9 @@ comment. On a re-run:
 
 ```
 ui-code-review/
-├─ .claude-plugin/plugin.json     plugin name and version
+├─ .claude-plugin/
+│  ├─ plugin.json                 plugin name and version
+│  └─ marketplace.json            makes this repository the `ui-review` marketplace
 ├─ skills/
 │  ├─ review/SKILL.md             the /ui-code-review:review steps Claude follows
 │  └─ axis-scss/                  the AXIS standard: SKILL.md and docs/ (rules R-01..R-36)

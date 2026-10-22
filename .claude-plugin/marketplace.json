@@ -1,0 +1,13 @@
+{
+  "name": "ui-review",
+  "owner": {
+    "name": "UI Team"
+  },
+  "plugins": [
+    {
+      "name": "ui-code-review",
+      "source": "./",
+      "description": "UI code review for Git Pull Requests and TFVC changesets: AXIS, localization, UI security, images and assets, and accessibility rules, posted as comments."
+    }
+  ]
+}
