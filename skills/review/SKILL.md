@@ -1,6 +1,6 @@
 ---
 name: review
-description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), the Angular rules (NG-xx) and the accessibility rules (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
+description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), localization (I18N-xx) and the accessibility rules (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
 argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 ---
 
@@ -61,8 +61,8 @@ ask whether to review all of them before going on. If they say no, release the l
 
 | Reviewer | Files it gets |
 |---|---|
-| `ui-code-review:reviewer-axis` | every file in `files` (it skips what AXIS doesn't cover) |
-| `ui-code-review:reviewer-angular` | Angular files only: `.ts` and `.html` under an Angular app (`src/app/`, or names like `*.component.*`, `*.service.ts`, `*.directive.ts`, `*.pipe.ts`, `*.routes.ts`). Not `.cshtml` or MVC `wwwroot` scripts. |
+| `ui-code-review:reviewer-axis` | every `role: ui` file in `files` (it skips what AXIS doesn't cover) |
+| `ui-code-review:reviewer-i18n` | `role: ui` files that are `.html`, `.cshtml`, `.ts` or `.js`, and every `role: translation` file. Skip it when there are none. |
 | accessibility areas | markup files (`.html`, `.cshtml`) and Angular component `.ts`, per the pre-scan below |
 
 **Accessibility pre-scan.** Grep each markup file's `contentFile` and run only the areas that match
@@ -88,10 +88,10 @@ Launch every selected reviewer **in one message** (they are independent).
   doesn't exist, skip AXIS and say so in the final answer)
 - `Files:` the selected entries as JSON (`path`, `contentFile`, `changedLines`).
 
-**Angular:** prompt contains
-- `Rules: ${CLAUDE_PLUGIN_ROOT}/rules/angular.md` (as an absolute path)
-- `Files:` the selected entries as JSON
-- `Angular version:` from the repo's `package.json` when reviewing a PR in a local repo, else `unknown`.
+**I18N:** prompt contains
+- `Rules: ${CLAUDE_PLUGIN_ROOT}/rules/i18n.md` (as an absolute path)
+- `Files:` the selected entries as JSON (`path`, `role`, `contentFile`, `changedLines`)
+- `Translations:` the `translations` array of target.json as JSON (`path`, `contentFile`), or `[]`.
 
 **Accessibility areas:** prompt contains, per file: `Stack: Angular` or `Stack: ASP.NET MVC`, the
 original `path`, the `contentFile` to read, and its `changedLines`. Also list every other entry in
@@ -104,7 +104,10 @@ component's `.ts`, or a child component, before reporting. Tell the agent:
 - If a finding depends on code in another file, read that file first (from the files above or the
   context files). If you can't open the file that decides it, put the finding under `OutOfScope:`.
 - Give `location` as one line number in contentFile: the line of the element at fault, not the start
-  of the block around it. If the same defect is on several lines, give one finding per line."
+  of the block around it. If the same defect is on several lines, give one finding per line.
+- Text written in code instead of a translation key, or a missing translation, is the I18N reviewer's:
+  don't report it. Report a missing or wrong accessible name only when no text, translated or not,
+  provides it."
 
 ## Step 4: Merge the findings
 
@@ -114,7 +117,7 @@ Don't convert or edit the replies yourself. Save each reviewer's reply **exactly
 | Reviewer | File |
 |---|---|
 | reviewer-axis | `axis.txt` |
-| reviewer-angular | `angular.txt` |
+| reviewer-i18n | `i18n.txt` |
 | accessibility-labels / alt / aria / semantics / keyboard | `a11y-labels.txt` / `a11y-alt.txt` / `a11y-aria.txt` / `a11y-semantics.txt` / `a11y-keyboard.txt` |
 
 Then build `findings.json` with fixed rules (same replies → same findings → no duplicate comments on a

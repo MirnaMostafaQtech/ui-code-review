@@ -8,7 +8,7 @@ It reviews **only the changed lines** of UI files against three rule sets:
 | Rule set | Rule IDs | Source |
 |---|---|---|
 | AXIS (SCSS / CSS and class names) | `R-xx` | the `axis-scss` skill, bundled in [`skills/axis-scss`](skills/axis-scss) |
-| Angular templates and TypeScript | `NG-xx` | [`rules/angular.md`](rules/angular.md) |
+| Localization (text in code, translation keys, Arabic / English files) | `I18N-xx` | [`rules/i18n.md`](rules/i18n.md) |
 | Accessibility (Angular and Razor) | `A11Y-*` | five area agents from accessibility-framework v1.2.0, bundled in [`agents`](agents) and [`references`](references) |
 
 Nothing is posted until you approve the preview. Everything the review needs ships inside this plugin.
@@ -72,12 +72,15 @@ taken over; for a younger one, the review asks you first and then takes it over 
   base against the PR head.
 - **Changeset:** reads the changeset's files and their previous versions from the server.
 
-It keeps only UI files (`.html`, `.scss`, `.css`, `.ts`, `.cshtml`, `.js`). It skips minified files,
-`.spec.ts`, `.d.ts`, and anything under `node_modules`, `dist`, `bin` or `obj`. The output is:
+It keeps only UI files (`.html`, `.scss`, `.css`, `.ts`, `.cshtml`, `.js`) and translation files
+(`.json` under an `i18n`, `locale(s)`, `lang(s)` or `translations` folder, and `.resx`). It skips
+minified files, `.spec.ts`, `.d.ts`, and anything under `node_modules`, `dist`, `bin` or `obj`. The
+output is:
 
-- `target.json`: each file's `path`, `contentFile` (the full new file) and `changedLines` (new-side line
-  ranges).
-- `files\`: the full new content of each file.
+- `target.json`: each file's `path`, `role` (`ui` or `translation`), `contentFile` (the full new file)
+  and `changedLines` (new-side line ranges); and `translations`, every translation file of the project
+  at the reviewed version (up to 80), so the I18N reviewer can check keys in each language.
+- `files\`: the full new content of each file. `translations\`: the translation files.
 
 If no UI file changed, the review stops. If more than 40 changed, it asks before going on.
 
@@ -85,8 +88,8 @@ If no UI file changed, the review stops. If more than 40 changed, it asks before
 
 | Reviewer | Gets |
 |---|---|
-| `reviewer-axis` | every file (stylesheet rules for `.scss` / `.css`, class-name rules for markup and scripts) |
-| `reviewer-angular` | Angular `.ts` / `.html` only |
+| `reviewer-axis` | every UI file (stylesheet rules for `.scss` / `.css`, class-name rules for markup and scripts) |
+| `reviewer-i18n` | markup and script files, and the changed translation files |
 | accessibility areas | markup files and Angular component `.ts`, only for the areas a quick grep matches |
 
 The accessibility pre-scan runs an area only when a file contains something it covers. For example,
@@ -134,7 +137,7 @@ Which findings become comments:
 - Only findings on changed lines are kept.
 - Every Error gets an inline comment.
 - Warnings get inline comments up to `-MaxWarnings` (15 by default), chosen by priority:
-  accessibility first, then AXIS, then Angular, taking one finding per rule in turn so one repeated
+  accessibility first, then localization, then AXIS, taking one finding per rule in turn so one repeated
   rule can't fill every slot. Any beyond that appear in the summary only.
 - Info appears in the summary only.
 - Findings on the same line share one comment.
@@ -169,12 +172,12 @@ ui-code-review/
 │  └─ axis-scss/                  the AXIS standard: SKILL.md and docs/ (rules R-01..R-36)
 ├─ agents/
 │  ├─ reviewer-axis.md            AXIS reviewer (read-only)
-│  ├─ reviewer-angular.md         Angular reviewer (read-only)
+│  ├─ reviewer-i18n.md            localization reviewer (read-only)
 │  └─ accessibility-*.md          the five accessibility area agents (read-only)
 ├─ references/accessibility-core/ shared accessibility rules and Angular / MVC idioms the agents read
 ├─ rules/
-│  ├─ angular.md                  the NG-xx rules, severities and fixes
 │  ├─ axis.md                     how AXIS is applied (rules live in skills/axis-scss)
+│  ├─ i18n.md                     the I18N-xx rules, severities and fixes
 │  └─ a11y.md                     how the accessibility areas are applied
 ├─ scripts/
 │  ├─ Get-ReviewTarget.ps1        step 1

@@ -17,7 +17,7 @@
 
     Comment selection:
       - every Error and every Warning gets its own inline comment where it is (at most $MaxWarnings
-        Warnings, chosen by priority: accessibility, then AXIS, then Angular, one per rule in turn;
+        Warnings, chosen by priority: accessibility, localization, AXIS, then any other, one per rule in turn;
         the rest are listed in the summary only); Info goes to the summary only;
       - findings on the same line are merged into one comment.
 #>
@@ -107,10 +107,10 @@ $kept = @($kept | Sort-Object { $severityRank[$_.severity] }, file, line)
 
 # ---------- 2. choose what becomes an inline comment ----------
 
-# Every Error. Warnings by priority up to $MaxWarnings: accessibility first, then AXIS, then Angular,
-# taking one finding per rule in turn so a single repeated rule can't fill every slot.
+# Every Error. Warnings by priority up to $MaxWarnings: accessibility first, then localization, then
+# AXIS, then any other, taking one finding per rule in turn so a single repeated rule can't fill every slot.
 $inline = @($kept | Where-Object { $_.severity -eq 'Error' })
-$ruleFamilyRank = { param($ruleId) if ($ruleId -like 'A11Y-*') { 0 } elseif ($ruleId -like 'R-*') { 1 } else { 2 } }
+$ruleFamilyRank = { param($ruleId) if ($ruleId -like 'A11Y-*') { 0 } elseif ($ruleId -like 'I18N-*') { 1 } elseif ($ruleId -like 'R-*') { 2 } else { 3 } }
 $warningQueues = @($kept | Where-Object { $_.severity -eq 'Warning' } |
     Group-Object ruleId | Sort-Object { & $ruleFamilyRank $_.Name }, Name |
     ForEach-Object { , @($_.Group) })
@@ -167,7 +167,7 @@ else {
     }
 }
 [void]$sb.AppendLine()
-[void]$sb.AppendLine('Rules: AXIS (`R-xx`), Angular (`NG-xx`), accessibility (`A11Y-*`).')
+[void]$sb.AppendLine('Rules: AXIS (`R-xx`), localization (`I18N-xx`), accessibility (`A11Y-*`).')
 # Review signature: changes only when the set of findings changes. A re-run with the same signature
 # posts nothing new (summary and work item comment are skipped).
 $reviewKey = "$($target.kind)-$($target.id)"
