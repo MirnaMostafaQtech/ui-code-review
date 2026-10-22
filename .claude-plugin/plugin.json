@@ -1,6 +1,6 @@
 {
   "name": "ui-code-review",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "UI code review for Git Pull Requests and TFVC changesets: reviews changed UI files against AXIS (R-xx), localization (I18N-xx), UI security (SEC-xx), images and assets (PERF-xx) and accessibility (A11Y-xx) rules and posts the findings as comments.",
   "author": { "name": "UI Team" }
 }

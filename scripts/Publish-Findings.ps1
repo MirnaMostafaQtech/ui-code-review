@@ -5,8 +5,10 @@
     keeps only findings on changed lines, writes report.md, and - unless -DryRun - posts them:
 
         pr        -> one inline thread per line on the PR diff + one summary thread.
-                     Re-runs don't repeat a comment (hidden fingerprint), and threads whose finding
-                     is gone are marked Fixed.
+                     Re-runs don't repeat a comment (hidden fingerprint). A thread is marked Fixed
+                     only when its finding is gone AND the line it was on was changed or removed
+                     (hidden line marker): a finding a reviewer simply didn't repeat, or a reviewer
+                     that didn't run, never closes a thread.
         changeset -> one comment per line on the changeset (TFS discussion API) + a summary comment.
                      If the server refuses that API, falls back to the changeset's linked work
                      item(s): one comment in the work item's Discussion with every finding and the
@@ -110,6 +112,24 @@ foreach ($finding in $rawFindings) {
         message     = "$($finding.message)"
         fix         = "$($finding.fix)"
         fingerprint = Get-Fingerprint $finding.ruleId $file.path $lineText $occurrence
+        lineKey     = Get-Fingerprint 'line' $file.path $lineText $occurrence
+    }
+}
+
+# Line keys of every line as it is now, in every file of the review (same text + occurrence rule as the
+# fingerprints). A thread whose line key is still here sits on an unchanged line.
+$currentLineKeys = @{}
+foreach ($f in @($target.files)) {
+    if (-not $lineCache.ContainsKey($f.path)) {
+        $lineCache[$f.path] = [IO.File]::ReadAllLines($f.contentFile, [Text.Encoding]::UTF8)
+    }
+    $seenText = New-Object 'System.Collections.Generic.Dictionary[string,int]'
+    foreach ($text in $lineCache[$f.path]) {
+        $trimmed = $text.Trim()
+        $occurrence = 0
+        if ($seenText.ContainsKey($trimmed)) { $occurrence = $seenText[$trimmed] }
+        $seenText[$trimmed] = $occurrence + 1
+        $currentLineKeys[(Get-Fingerprint 'line' $f.path $text $occurrence)] = $true
     }
 }
 $kept = @($kept | Sort-Object { $severityRank[$_.severity] }, file, line)
@@ -146,7 +166,7 @@ foreach ($group in ($inline | Group-Object { "$($_.file)|$($_.line)" })) {
     $body = ($items | ForEach-Object {
         "🤖 UI Review — **$($_.ruleId)** ($($_.severity)): $($_.message)`n`n**Fix:** $($_.fix)"
     }) -join "`n`n---`n`n"
-    $prints = ($items | ForEach-Object { "<!-- ${marker}:$($_.fingerprint) -->" }) -join ''
+    $prints = (($items | ForEach-Object { "<!-- ${marker}:$($_.fingerprint) -->" }) -join '') + "<!-- ${marker}-line:$($items[0].lineKey) -->"
     $comments += [pscustomobject]@{
         file         = $items[0].file
         line         = $items[0].line
@@ -238,6 +258,10 @@ function Get-Fingerprints([string]$Text) {
     return @([regex]::Matches("$Text", "<!-- ${marker}:([0-9a-f]{16}) -->") | ForEach-Object { $_.Groups[1].Value })
 }
 
+function Get-LineKeys([string]$Text) {
+    return @([regex]::Matches("$Text", "<!-- ${marker}-line:([0-9a-f]{16}) -->") | ForEach-Object { $_.Groups[1].Value })
+}
+
 if ($target.kind -eq 'pr') {
     $base = "$($target.collectionUrl)/$([Uri]::EscapeDataString($target.project))/_apis/git/repositories/$([Uri]::EscapeDataString($target.repository))/pullRequests/$($target.id)/threads"
 
@@ -270,17 +294,23 @@ if ($target.kind -eq 'pr') {
         catch { $failed++; Write-Warning "Comment on $($c.file):$($c.line) failed: $($_.Exception.Message)" }
     }
 
-    # Mark active threads whose findings are all gone as Fixed (status 2).
+    # Mark an active thread Fixed (status 2) only when none of its findings came back AND the line it
+    # was on was changed or removed. Reviewers are not deterministic, and a reviewer may be skipped or
+    # its reply unreadable: a finding missing from this run on an unchanged line is not proof of a fix.
+    # Threads posted before line markers existed have none and are left alone.
     $current = @{}
     foreach ($f in $kept) { $current[$f.fingerprint] = $true }
     $resolved = 0
+    $keptOpen = 0
     foreach ($thread in @($existing.Values | Sort-Object id -Unique)) {
         if ("$($thread.status)" -notin @('active', '1')) { continue }
-        $prints = Get-Fingerprints (($thread.comments | ForEach-Object { Get-CommentText $_ }) -join '')
-        if ($prints.Count -gt 0 -and @($prints | Where-Object { $current.ContainsKey($_) }).Count -eq 0) {
-            try { [void](Invoke-TfsJson PATCH "$base/$($thread.id)?api-version=5.0" @{ status = 2 }); $resolved++ }
-            catch { Write-Warning "Resolving thread $($thread.id) failed: $($_.Exception.Message)" }
-        }
+        $threadText = ($thread.comments | ForEach-Object { Get-CommentText $_ }) -join ''
+        $prints = Get-Fingerprints $threadText
+        if ($prints.Count -eq 0 -or @($prints | Where-Object { $current.ContainsKey($_) }).Count -gt 0) { continue }
+        $lineKeys = Get-LineKeys $threadText
+        if ($lineKeys.Count -eq 0 -or @($lineKeys | Where-Object { $currentLineKeys.ContainsKey($_) }).Count -gt 0) { $keptOpen++; continue }
+        try { [void](Invoke-TfsJson PATCH "$base/$($thread.id)?api-version=5.0" @{ status = 2 }); $resolved++ }
+        catch { Write-Warning "Resolving thread $($thread.id) failed: $($_.Exception.Message)" }
     }
 
     # One summary per PR: edit it in place when the findings changed, leave it when they didn't.
@@ -297,7 +327,7 @@ if ($target.kind -eq 'pr') {
     }
     else { $summaryState = 'summary unchanged' }
 
-    Write-Output "PR $($target.id): $posted posted, $skipped already there, $failed failed, $resolved resolved, $summaryState."
+    Write-Output "PR $($target.id): $posted posted, $skipped already there, $failed failed, $resolved resolved, $keptOpen left open (finding not repeated but its line is unchanged), $summaryState."
 }
 else {
     # TFVC changeset: legacy discussion API (route discussion/threads exists on TFS / Azure DevOps Server; needs a PAT

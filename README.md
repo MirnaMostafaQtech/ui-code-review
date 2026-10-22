@@ -182,8 +182,12 @@ path and the text of the line. It does not use the line number, so moving a line
 comment. On a re-run:
 
 - comments already on the PR or changeset are not posted again;
-- on a PR, an active thread whose finding is gone is marked **Fixed**. Threads someone already resolved
-  are left alone.
+- on a PR, an active thread is marked **Fixed** only when its finding is gone *and* the line it was on
+  was changed or removed (each comment also carries a hidden line marker,
+  `<!-- ui-review-line:... -->`). A finding that a re-run just didn't repeat, on a line nobody touched,
+  leaves its thread open: reviewers are not deterministic, and a skipped or unreadable reviewer is not a
+  fix. Threads someone already resolved, and threads posted before 0.3.4 (no line marker), are left
+  alone.
 - the PR summary is edited in place when the findings change. A new changeset or work item summary is
   posted only when the findings change.
 

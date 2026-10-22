@@ -44,7 +44,9 @@ $changedByPath = @{}
 foreach ($t in $target.files) { $changedByPath["$($t.path)"] = @($t.changedLines) }
 
 # Wording a reviewer uses for something that needs no change, or that it could not confirm.
-$nonDefectPattern = '(?i)\bnot a defect\b|\bno [\w-]+ defect\b|\bunverified\b|\bnot verified\b|\b(could|can) ?not (read|open|verify|confirm|check)\b|\bdid not (open|read|check|inspect|verify)\b|\bwas not opened\b|\bleave (the markup|it|this) as is\b|\bnot worth\b'
+# "Could not / did not read" counts only in the first person or the passive: "users cannot open the
+# menu" describes a real defect.
+$nonDefectPattern = '(?i)\bnot a defect\b|\bno [\w-]+ defect\b|\bunverified\b|\bnot verified\b|\bI (could|can) ?not (read|open|verify|confirm|check|inspect)\b|\bI (couldn''t|can''t|did not|didn''t) (read|open|verify|confirm|check|inspect)\b|\b(could|can) ?not be (read|opened|verified|confirmed|checked)\b|\bwas not opened\b|\bleave (the markup|it|this) as is\b|\bnot worth\b'
 $nonDefectFixPattern = '(?i)^\s*(none|optional)\b'
 
 $areaRule = @{
@@ -81,6 +83,12 @@ function Get-AnchorLine([string]$Location, [string]$Path) {
         }
     }
     return $numbers[0]
+}
+
+# A field of a JSON finding, or '' when the reviewer left it out (strict mode throws on a missing one).
+function Get-Field($Item, [string]$Name) {
+    if ($null -eq $Item -or $Item -isnot [psobject] -or -not $Item.PSObject.Properties[$Name]) { return '' }
+    return "$($Item.$Name)"
 }
 
 function Get-JsonBlock([string]$Text) {
@@ -151,18 +159,22 @@ foreach ($file in (Get-ChildItem -LiteralPath $reviewDir -Filter '*.txt' | Sort-
         try { $jsonFindings = Get-JsonBlock $text }
         catch { $dropped += "${name}: reply is not a JSON findings array, all of it skipped ($($_.Exception.Message))"; continue }
         foreach ($f in $jsonFindings) {
-            $path = Resolve-TargetPath "$($f.file)"
-            if (-not $path) { $dropped += "${name}: file '$($f.file)' not in this review"; continue }
+            $ruleId = (Get-Field $f 'ruleId').Trim()
+            $path = Resolve-TargetPath (Get-Field $f 'file')
+            if (-not $path) { $dropped += "${name}: file '$(Get-Field $f 'file')' not in this review"; continue }
             # line may come as a number, a string or a range such as "12-14": use its first number.
-            $lineMatch = [regex]::Match("$($f.line)", '\d+')
-            if (-not $lineMatch.Success) { $dropped += "${name}: $($f.ruleId) in $path has no line number ('$($f.line)')"; continue }
+            $lineMatch = [regex]::Match((Get-Field $f 'line'), '\d+')
+            if (-not $lineMatch.Success) { $dropped += "${name}: $ruleId in $path has no line number ('$(Get-Field $f 'line')')"; continue }
+            if (-not $ruleId) { $dropped += "${name}: finding at ${path}:$($lineMatch.Value) has no ruleId"; continue }
+            $message = (Get-Field $f 'message').Trim()
+            if (-not $message) { $dropped += "${name}: $ruleId at ${path}:$($lineMatch.Value) has no message"; continue }
             $all += [pscustomobject]@{
-                ruleId   = "$($f.ruleId)"
-                severity = "$($f.severity)"
+                ruleId   = $ruleId
+                severity = (Get-Field $f 'severity').Trim()
                 file     = $path
                 line     = [int]$lineMatch.Value
-                message  = "$($f.message)".Trim()
-                fix      = "$($f.fix)".Trim()
+                message  = $message
+                fix      = (Get-Field $f 'fix').Trim()
                 reviewer = $name
             }
         }
