@@ -91,8 +91,10 @@ taken over; for a younger one, the review asks you first and then takes it over 
   base against the PR head.
 - **Changeset:** reads the changeset's files and their previous versions from the server.
 
-It keeps only UI files (`.html`, `.scss`, `.css`, `.ts`, `.cshtml`, `.js`) and translation files
-(`.json` under an `i18n`, `locale(s)`, `lang(s)` or `translations` folder, and `.resx`). It skips
+It keeps only UI files (`.html`, `.scss`, `.css`, `.ts`, `.cshtml`, `.js`) and translation files:
+`.json` under an `i18n`, `l10n`, `locale(s)`, `lang(s)`, `translations` or `Resources` folder;
+TypeScript / JS dictionaries (`*.i18n.ts`, `*.translations.ts`, or `ar.ts` / `en.ts` under one of those
+folders); Angular `.xlf` / `.xliff` and `messages.<lang>.json`; and .NET `.resx` and `.po`. It skips
 minified files, `.spec.ts`, `.d.ts`, and anything under `node_modules`, `dist`, `bin` or `obj`. The
 output is:
 

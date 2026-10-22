@@ -48,11 +48,23 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../common/review-lock.ps1')
 
 $UiFilePattern = '\.(html|scss|css|ts|cshtml|js)$'
-# ngx-translate style JSON under a translations folder, and .NET resource files.
-$TranslationPattern = '((^|/)(i18n|l10n|locale|locales|lang|langs|translations)/.+\.json$)|(\.resx$)'
+# Translation files, Angular and .NET:
+#   - JSON under a translations folder (ngx-translate / transloco), or under Resources (.NET JSON localization)
+#   - TypeScript / JS dictionaries: *.i18n.ts, *.translations.ts, or <lang>.ts under a translations folder
+#   - Angular built-in i18n (.xlf / .xliff, messages.<lang>.json)
+#   - .NET .resx and .po files
+$TranslationFolders = '(i18n|l10n|locale|locales|lang|langs|translations|resources)'
+$TranslationPattern = @(
+    "((^|/)$TranslationFolders/.+\.json$)"
+    '(\.(i18n|translations?|locale)\.(ts|js)$)'
+    "((^|/)$TranslationFolders/(.+/)?[a-z]{2}([-_][A-Za-z]{2,4})?\.(ts|js)$)"
+    '(\.(xlf|xliff)$)'
+    '((^|/)messages(\.[A-Za-z-]+)?\.json$)'
+    '(\.(resx|po)$)'
+) -join '|'
 $MaxTranslationFiles = 80
 $AssetPattern = '\.(png|jpe?g|gif|bmp|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm|ogg)$'
-$SkipPattern = '(\.min\.(css|js)$)|(\.spec\.ts$)|(\.d\.ts$)|(/node_modules/)|(/dist/)|(/bin/)|(/obj/)'
+$SkipPattern = '(\.min\.(css|js)$)|(\.spec\.ts$)|(\.d\.ts$)|((^|/)(node_modules|dist|bin|obj)/)'
 
 $pat = $env:SONARTOOLKIT_TFS_PAT
 if (-not $pat) { $pat = [Environment]::GetEnvironmentVariable('SONARTOOLKIT_TFS_PAT', 'User') }
@@ -88,8 +100,9 @@ function Test-TranslationFile([string]$Path) {
 }
 
 function Get-FileRole([string]$Path) {
-    if (Test-UiFile $Path) { return 'ui' }
+    # Translation first: a dictionary such as shell.i18n.ts is also a .ts file.
     if (Test-TranslationFile $Path) { return 'translation' }
+    if (Test-UiFile $Path) { return 'ui' }
     return $null
 }
 

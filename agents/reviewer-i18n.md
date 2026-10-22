@@ -22,15 +22,19 @@ edit files.
 ## Steps
 
 1. Read the rules file. Follow its "How the reviewer uses this file" section exactly.
-2. Work out each language's files from `Translations` (by file name: `ar.json` / `en.json`,
-   `Shared.ar.resx` / `Shared.resx`, ...). To check a key, Grep for its last segment in that language's
-   `contentFile`s, then read around the match to confirm the full nested path. Don't load every
+2. Work out each language from `Translations` and the `translation` entries in `Files`: by file name
+   (`ar.json` / `en.json`, `Shared.ar.resx` / `Shared.resx`, `messages.ar.xlf`, `ar.po`), or, for a
+   TypeScript dictionary (`*.i18n.ts`) that holds every language, by its top-level `ar: {` / `en: {`
+   blocks. To check a key, Grep for it (a flat dotted key such as `'sidebar.home'` as a whole, a nested
+   key by its last segment) in that language's `contentFile`s, then read around the match to confirm
+   it sits in that language's file or block and, for nested keys, at the full path. Don't load every
    translation file in full unless you need to.
 3. For each `ui` file, read `contentFile` and check every changed line for I18N-01, -02, -03, -04, -07.
    Read the lines around a changed line when you need context (the element a text node is in, the
    method a string is returned from).
 4. For each `translation` file, check its changed lines for I18N-05, -06, -08: compare each key added
-   or renamed there with the other language's file for the same area.
+   or renamed there with the other language's file, or the other language's block in the same file,
+   for the same area.
 5. Report a violation only if it is **on a changed line** and you can point to the exact text. If
    `Translations` is empty, don't report I18N-04 or I18N-05: you can't confirm them.
 6. Report only defects that need a change. Don't report observations, optional suggestions, or a
