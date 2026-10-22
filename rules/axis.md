@@ -1,11 +1,12 @@
 # AXIS (SCSS / CSS and class names)
 
-ui-code-review has no AXIS rules of its own. The rules live in the **axis-scss** skill, which must be
-installed. The reviewer reads the skill and cites its rule IDs (`R-01`..`R-36`, `R-COMP-*`, ...) as-is.
+The AXIS rules ship with this plugin as the **axis-scss** skill, in `skills/axis-scss/`. The reviewer
+reads it and cites its rule IDs (`R-01`..`R-36`, `R-COMP-*`, ...) as-is. Paths below are relative to
+`skills/axis-scss/`.
 
 | What | Where |
 |---|---|
-| Entry point | `axis-scss` skill → `SKILL.md` |
+| Entry point | `SKILL.md` |
 | All rules with priority | `docs/guides/rules.md` |
 | PR review checklist | `docs/guides/review-checklist.md` |
 | Stylesheet accessibility | `docs/guides/accessibility.md` |

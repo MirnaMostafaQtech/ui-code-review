@@ -7,17 +7,15 @@ It reviews **only the changed lines** of UI files against three rule sets:
 
 | Rule set | Rule IDs | Source |
 |---|---|---|
-| AXIS (SCSS / CSS and class names) | `R-xx` | the `axis-scss` skill |
+| AXIS (SCSS / CSS and class names) | `R-xx` | the `axis-scss` skill, bundled in [`skills/axis-scss`](skills/axis-scss) |
 | Angular templates and TypeScript | `NG-xx` | [`rules/angular.md`](rules/angular.md) |
-| Accessibility (Angular and Razor) | `A11Y-*` | the `accessibility-framework` plugin |
+| Accessibility (Angular and Razor) | `A11Y-*` | five area agents from accessibility-framework v1.2.0, bundled in [`agents`](agents) and [`references`](references) |
 
-Nothing is posted until you approve the preview.
+Nothing is posted until you approve the preview. Everything the review needs ships inside this plugin.
 
 ## Requirements
 
 - Windows PowerShell 5.1 and Claude Code.
-- The `axis-scss` skill in `%USERPROFILE%\.claude\skills\axis-scss`.
-- The `accessibility-framework` plugin, v1.2.0 or newer.
 - `SONARTOOLKIT_TFS_PAT`: a TFS Personal Access Token in an environment variable (the same token as
   q-ai-quality-review). The scripts read it from the environment; it is never passed on a command line.
 - For a PR: a local Git clone of the repository, with an `https://` TFS remote named `origin`.
@@ -25,12 +23,16 @@ Nothing is posted until you approve the preview.
 
 ## Install
 
-From the folder that holds `.claude-plugin/marketplace.json` (the folder above this one):
+Once per machine, from the folder that holds `.claude-plugin/marketplace.json` (the folder above this
+one):
 
 ```
 /plugin marketplace add <path to that folder>
 /plugin install ui-code-review@ui-review-local
 ```
+
+The bundled AXIS skill shows up as `ui-code-review:axis-scss`, and the accessibility agents as
+`ui-code-review:accessibility-*`.
 
 ## Use
 
@@ -91,8 +93,8 @@ them. Each one:
   read-only context for this.
 - gives one exact line per finding.
 
-AXIS and Angular reply with a JSON list; accessibility agents reply in the accessibility-framework area
-format. Each reply is saved unchanged to `reviews\<name>.txt`.
+AXIS and Angular reply with a JSON list; accessibility agents reply in the accessibility-framework
+area format (`Area:` / `Findings:` / `OutOfScope:`). Each reply is saved unchanged to `reviews\<name>.txt`.
 
 ### 4. Merge: `scripts/Merge-Findings.ps1`
 
@@ -151,13 +153,17 @@ comment. On a re-run:
 ```
 ui-code-review/
 ├─ .claude-plugin/plugin.json     plugin name and version
-├─ skills/review/SKILL.md         the /ui-code-review:review steps Claude follows
+├─ skills/
+│  ├─ review/SKILL.md             the /ui-code-review:review steps Claude follows
+│  └─ axis-scss/                  the AXIS standard: SKILL.md and docs/ (rules R-01..R-36)
 ├─ agents/
 │  ├─ reviewer-axis.md            AXIS reviewer (read-only)
-│  └─ reviewer-angular.md         Angular reviewer (read-only)
+│  ├─ reviewer-angular.md         Angular reviewer (read-only)
+│  └─ accessibility-*.md          the five accessibility area agents (read-only)
+├─ references/accessibility-core/ shared accessibility rules and Angular / MVC idioms the agents read
 ├─ rules/
 │  ├─ angular.md                  the NG-xx rules, severities and fixes
-│  ├─ axis.md                     how AXIS is applied (rules live in the axis-scss skill)
+│  ├─ axis.md                     how AXIS is applied (rules live in skills/axis-scss)
 │  └─ a11y.md                     how the accessibility areas are applied
 ├─ scripts/
 │  ├─ Get-ReviewTarget.ps1        step 1
@@ -174,8 +180,8 @@ ui-code-review/
 | `not a git repository` on `pr` | Run the review from inside the repository's local clone. |
 | Work item not found / 404 | The work item is in another collection. Use the right one in `--collection`. |
 | `401 Unauthorized` on changeset comments | The PAT can't comment on changesets in that collection. The review falls back to the work item; to comment on the changeset itself, extend the PAT's permissions. |
-| AXIS skipped | The `axis-scss` skill folder is missing. Install the skill. |
-| An accessibility area skipped | The `accessibility-framework` plugin is missing or older than v1.2.0. |
+| AXIS skipped | `skills/axis-scss/docs` is missing from the installed plugin. Reinstall it from the full package. |
+| An accessibility area skipped | `agents/accessibility-*.md` or `references/` is missing from the installed plugin. Reinstall it from the full package. |
 
 ## Known limits
 

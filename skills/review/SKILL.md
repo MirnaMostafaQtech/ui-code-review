@@ -1,6 +1,6 @@
 ---
 name: review
-description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), the Angular rules (NG-xx) and the accessibility-framework plugin (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
+description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), the Angular rules (NG-xx) and the accessibility rules (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
 argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 ---
 
@@ -18,9 +18,10 @@ argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 
 Nothing is ever posted without the user's yes: Step 5 always shows the comments first and asks.
 
-Requires `SONARTOOLKIT_TFS_PAT` (same token as q-ai-quality-review), the `axis-scss` skill and the
-`accessibility-framework` plugin. Never print or pass the token on a command line; the scripts read it
-from the environment.
+Requires `SONARTOOLKIT_TFS_PAT` (same token as q-ai-quality-review). The AXIS rules
+(`skills/axis-scss`) and the accessibility agents (`agents/accessibility-*.md`, `references/`) ship
+inside this plugin. Never print or pass the token on a command line; the scripts read it from the
+environment.
 
 All scripts are Windows PowerShell; run them as
 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/<script>.ps1" ...`.
@@ -47,18 +48,18 @@ ask whether to review all of them before going on. Stop if they say no.
 |---|---|
 | `ui-code-review:reviewer-axis` | every file in `files` (it skips what AXIS doesn't cover) |
 | `ui-code-review:reviewer-angular` | Angular files only: `.ts` and `.html` under an Angular app (`src/app/`, or names like `*.component.*`, `*.service.ts`, `*.directive.ts`, `*.pipe.ts`, `*.routes.ts`). Not `.cshtml` or MVC `wwwroot` scripts. |
-| accessibility-framework areas | markup files (`.html`, `.cshtml`) and Angular component `.ts`, per the pre-scan below |
+| accessibility areas | markup files (`.html`, `.cshtml`) and Angular component `.ts`, per the pre-scan below |
 
 **Accessibility pre-scan.** Grep each markup file's `contentFile` and run only the areas that match
 something; pass each area only the files that matched it:
 
 | Area agent | Run when the file contains |
 |---|---|
-| `accessibility-framework:accessibility-labels` | `<input`, `<select`, `<textarea`, `formControlName`, `asp-for`, `<label` |
-| `accessibility-framework:accessibility-alt` | `<img`, `<svg`, `<i `, `icon`, `<mat-icon`, `<fa-icon` |
-| `accessibility-framework:accessibility-aria` | `aria-`, `role=`, `[attr.`, `modal`, `dialog`, `toast`, `invalid` |
-| `accessibility-framework:accessibility-semantics` | `(click)`, `onclick`, `<table`, `<ul`, `<ol`, `<h1`..`<h6`, `<form`, `href="#"`, `javascript:` |
-| `accessibility-framework:accessibility-keyboard` | `tabindex`, `(click)`, `onclick`, `keydown`, `keyup`, `modal`, `dropdown` |
+| `ui-code-review:accessibility-labels` | `<input`, `<select`, `<textarea`, `formControlName`, `asp-for`, `<label` |
+| `ui-code-review:accessibility-alt` | `<img`, `<svg`, `<i `, `icon`, `<mat-icon`, `<fa-icon` |
+| `ui-code-review:accessibility-aria` | `aria-`, `role=`, `[attr.`, `modal`, `dialog`, `toast`, `invalid` |
+| `ui-code-review:accessibility-semantics` | `(click)`, `onclick`, `<table`, `<ul`, `<ol`, `<h1`..`<h6`, `<form`, `href="#"`, `javascript:` |
+| `ui-code-review:accessibility-keyboard` | `tabindex`, `(click)`, `onclick`, `keydown`, `keyup`, `modal`, `dropdown` |
 
 Stack for each file: Angular for `.html` / `.ts` in an Angular app; `ASP.NET MVC` for `.cshtml` and
 MVC scripts.
@@ -68,7 +69,7 @@ MVC scripts.
 Launch every selected reviewer **in one message** (they are independent).
 
 **AXIS:** prompt contains
-- `AXIS docs: <user home>\.claude\skills\axis-scss\docs` (resolve the real home folder; if the folder
+- `AXIS docs: ${CLAUDE_PLUGIN_ROOT}/skills/axis-scss/docs` (as an absolute path; if the folder
   doesn't exist, skip AXIS and say so in the final answer)
 - `Files:` the selected entries as JSON (`path`, `contentFile`, `changedLines`).
 

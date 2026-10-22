@@ -83,7 +83,7 @@ Every rule names its source:
 ## Not here
 
 - Class names and SCSS: `axis.md` (including R-03 for `[class.x]` / `[ngClass]` / `classList`).
-- Accessibility: `a11y.md` (accessibility-framework plugin).
+- Accessibility: `a11y.md` (the bundled accessibility agents).
 - Back-end and data-layer concerns are out of scope for the UI review. NG-17 (HTTP error handling /
   interceptors), NG-25 (route guards / authorization), NG-26 (shared state in root services) and
   NG-27 (token storage) were removed; their IDs are not reused.
