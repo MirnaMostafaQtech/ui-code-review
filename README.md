@@ -69,8 +69,8 @@ The bundled AXIS skill shows up as `ui-code-review:axis-scss`, and the accessibi
 
 ```
 1. Build target   →  2. Pick reviewers  →  3. Review (parallel)  →  4. Merge  →  5. Preview → approve → post
-Get-ReviewTarget     by file type and       AXIS, Angular,          Merge-       Publish-Findings
-                     a11y pre-scan          a11y areas              Findings
+Get-ReviewTarget     by file type and       AXIS, I18N, SEC,        Merge-       Publish-Findings
+                     pre-scans              PERF, a11y areas        Findings
 ```
 
 Every run writes its working files to its own folder,
@@ -232,6 +232,7 @@ ui-code-review/
 | `not a git repository` on `pr` | Run the review from inside the repository's local clone. |
 | Work item not found / 404 | The work item is in another collection. Use the right one in `--collection`. |
 | `401 Unauthorized` on changeset comments | The PAT can't comment on changesets in that collection. The review falls back to the work item; to comment on the changeset itself, extend the PAT's permissions. |
+| Comments are not posted on the PR | Check the post step's output. **`401` / `403`**: the PAT needs **Code (Read & Write)**, and your account needs permission to contribute to pull requests in that repository; create a new PAT with that scope. **`already there`**: they were posted by an earlier run and are not repeated. **`Dry run: nothing posted`**: the run used `--dry-run`, or the preview was not approved; run again and answer yes. **`Comment on <file>:<line> failed`** for some lines only: the PR got new commits after the review started, so run the review again. |
 | AXIS skipped | `skills/axis-scss/docs` is missing from the installed plugin. Reinstall it from the full package. |
 | An accessibility area skipped | `agents/accessibility-*.md` or `references/` is missing from the installed plugin. Reinstall it from the full package. |
 | `REVIEW-LOCKED` | Another review of the same PR or changeset is running. Wait for it to finish. If it isn't running any more (its window was closed mid-review), tell the review so and it takes the lock over with `-Force`. |
