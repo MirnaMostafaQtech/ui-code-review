@@ -7,7 +7,8 @@
 
     Input: <OutDir>/reviews/*.txt, one file per reviewer, holding that reviewer's reply exactly as
     returned:
-        axis.txt, i18n.txt              -> a ```json``` array already in findings shape
+        axis.txt, i18n.txt,             -> a ```json``` array already in findings shape
+        security.txt, performance.txt
         a11y-labels.txt, a11y-alt.txt,  -> the accessibility-framework area format:
         a11y-aria.txt, a11y-semantics.txt,     Area: / Findings: - file: location: issue: fix:
         a11y-keyboard.txt                      runtimeCheck: ... / Conflicts: / OutOfScope:

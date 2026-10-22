@@ -1,6 +1,6 @@
 ---
 name: review
-description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), localization (I18N-xx) and the accessibility rules (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
+description: UI code review of a Git Pull Request or a TFVC changeset on the team's TFS / Azure DevOps Server. Reviews only the changed lines of UI files (SCSS/CSS, Angular templates and TypeScript, Razor views, scripts) against AXIS (R-xx), localization (I18N-xx), UI security (SEC-xx), images and assets (PERF-xx) and the accessibility rules (A11Y-*), shows the comments for approval, then posts them on the PR or changeset. Use when asked to review, check or comment on a PR or changeset's UI code.
 argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 ---
 
@@ -63,7 +63,18 @@ ask whether to review all of them before going on. If they say no, release the l
 |---|---|
 | `ui-code-review:reviewer-axis` | every `role: ui` file in `files` (it skips what AXIS doesn't cover) |
 | `ui-code-review:reviewer-i18n` | `role: ui` files that are `.html`, `.cshtml`, `.ts` or `.js`, and every `role: translation` file. Skip it when there are none. |
+| `ui-code-review:reviewer-security` | `role: ui` files that are `.html`, `.cshtml`, `.ts` or `.js` and match the security pre-scan below |
+| `ui-code-review:reviewer-performance` | `role: ui` files that are `.html`, `.cshtml`, `.scss`, `.css` or `.ts` and match the performance pre-scan below |
 | accessibility areas | markup files (`.html`, `.cshtml`) and Angular component `.ts`, per the pre-scan below |
+
+**Security and performance pre-scan.** Grep each candidate file's `contentFile` (case-insensitive) and
+pass the reviewer only the files that match; skip the reviewer when none do. Always include a file
+named `environment*.ts` in the security review.
+
+| Reviewer | Run on a file that contains |
+|---|---|
+| security | `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `bypassSecurityTrust`, `Html.Raw`, `HtmlString`, `eval(`, `new Function`, `setTimeout('`, `setInterval('`, `javascript:`, `localStorage`, `sessionStorage`, `document.cookie`, `target="_blank"`, `window.open`, `http://`, `<script`, `<iframe`, `BeginForm`, `.html(`, `$.ajax`, `$.post`, `apiKey`, `api_key`, `secret`, `password`, `token`, `connectionString` |
+| performance | `<img`, `ngSrc`, `<picture`, `<video`, `<iframe`, `@font-face`, `@import url`, `url(`, `background-image`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` |
 
 **Accessibility pre-scan.** Grep each markup file's `contentFile` and run only the areas that match
 something; pass each area only the files that matched it:
@@ -93,6 +104,16 @@ Launch every selected reviewer **in one message** (they are independent).
 - `Files:` the selected entries as JSON (`path`, `role`, `contentFile`, `changedLines`)
 - `Translations:` the `translations` array of target.json as JSON (`path`, `contentFile`), or `[]`.
 
+**Security:** prompt contains
+- `Rules: ${CLAUDE_PLUGIN_ROOT}/rules/security.md` (as an absolute path)
+- `Files:` the selected entries as JSON (`path`, `contentFile`, `changedLines`)
+- `Context files (read-only):` every other `role: ui` entry in `files` (`path` and `contentFile`).
+
+**Performance:** prompt contains
+- `Rules: ${CLAUDE_PLUGIN_ROOT}/rules/performance.md` (as an absolute path)
+- `Files:` the selected entries as JSON (`path`, `contentFile`, `changedLines`)
+- `Assets:` the `assets` array of target.json as JSON (`path`, `sizeBytes`), or `[]`.
+
 **Accessibility areas:** prompt contains, per file: `Stack: Angular` or `Stack: ASP.NET MVC`, the
 original `path`, the `contentFile` to read, and its `changedLines`. Also list every other entry in
 `files` (`path` and `contentFile`) under `Context files (read-only):`, so the agent can open a
@@ -118,6 +139,8 @@ Don't convert or edit the replies yourself. Save each reviewer's reply **exactly
 |---|---|
 | reviewer-axis | `axis.txt` |
 | reviewer-i18n | `i18n.txt` |
+| reviewer-security | `security.txt` |
+| reviewer-performance | `performance.txt` |
 | accessibility-labels / alt / aria / semantics / keyboard | `a11y-labels.txt` / `a11y-alt.txt` / `a11y-aria.txt` / `a11y-semantics.txt` / `a11y-keyboard.txt` |
 
 Then build `findings.json` with fixed rules (same replies → same findings → no duplicate comments on a

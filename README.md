@@ -3,12 +3,14 @@
 A Claude Code plugin that reviews the UI changes in a Git Pull Request or a TFVC changeset on the
 team's TFS / Azure DevOps Server, and posts the findings as review comments.
 
-It reviews **only the changed lines** of UI files against three rule sets:
+It reviews **only the changed lines** of UI files against five rule sets:
 
 | Rule set | Rule IDs | Source |
 |---|---|---|
 | AXIS (SCSS / CSS and class names) | `R-xx` | the `axis-scss` skill, bundled in [`skills/axis-scss`](skills/axis-scss) |
 | Localization (text in code, translation keys, Arabic / English files) | `I18N-xx` | [`rules/i18n.md`](rules/i18n.md) |
+| UI security (HTML from data, sanitization bypass, unencoded Razor output, secrets, unsafe links) | `SEC-xx` | [`rules/security.md`](rules/security.md) |
+| Images and assets (image size and loading, fonts, video, asset paths) | `PERF-xx` | [`rules/performance.md`](rules/performance.md) |
 | Accessibility (Angular and Razor) | `A11Y-*` | five area agents from accessibility-framework v1.2.0, bundled in [`agents`](agents) and [`references`](references) |
 
 Nothing is posted until you approve the preview. Everything the review needs ships inside this plugin.
@@ -79,7 +81,9 @@ output is:
 
 - `target.json`: each file's `path`, `role` (`ui` or `translation`), `contentFile` (the full new file)
   and `changedLines` (new-side line ranges); and `translations`, every translation file of the project
-  at the reviewed version (up to 80), so the I18N reviewer can check keys in each language.
+  at the reviewed version (up to 80), so the I18N reviewer can check keys in each language; and
+  `assets`, every image, font and video file the review adds or changes with its size, for the
+  performance reviewer.
 - `files\`: the full new content of each file. `translations\`: the translation files.
 
 If no UI file changed, the review stops. If more than 40 changed, it asks before going on.
@@ -90,6 +94,8 @@ If no UI file changed, the review stops. If more than 40 changed, it asks before
 |---|---|
 | `reviewer-axis` | every UI file (stylesheet rules for `.scss` / `.css`, class-name rules for markup and scripts) |
 | `reviewer-i18n` | markup and script files, and the changed translation files |
+| `reviewer-security` | markup and script files a quick grep matches (`innerHTML`, `Html.Raw`, `localStorage`, `target="_blank"`, `token`, ...) |
+| `reviewer-performance` | markup, stylesheet and component files a quick grep matches (`<img`, `<video`, `@font-face`, `url(`, ...) |
 | accessibility areas | markup files and Angular component `.ts`, only for the areas a quick grep matches |
 
 The accessibility pre-scan runs an area only when a file contains something it covers. For example,
@@ -137,7 +143,7 @@ Which findings become comments:
 - Only findings on changed lines are kept.
 - Every Error gets an inline comment.
 - Warnings get inline comments up to `-MaxWarnings` (15 by default), chosen by priority:
-  accessibility first, then localization, then AXIS, taking one finding per rule in turn so one repeated
+  security, accessibility, localization, AXIS, then images and assets, taking one finding per rule in turn so one repeated
   rule can't fill every slot. Any beyond that appear in the summary only.
 - Info appears in the summary only.
 - Findings on the same line share one comment.
@@ -173,11 +179,15 @@ ui-code-review/
 ├─ agents/
 │  ├─ reviewer-axis.md            AXIS reviewer (read-only)
 │  ├─ reviewer-i18n.md            localization reviewer (read-only)
+│  ├─ reviewer-security.md        UI security reviewer (read-only)
+│  ├─ reviewer-performance.md     images and assets reviewer (read-only)
 │  └─ accessibility-*.md          the five accessibility area agents (read-only)
 ├─ references/accessibility-core/ shared accessibility rules and Angular / MVC idioms the agents read
 ├─ rules/
 │  ├─ axis.md                     how AXIS is applied (rules live in skills/axis-scss)
 │  ├─ i18n.md                     the I18N-xx rules, severities and fixes
+│  ├─ security.md                 the SEC-xx rules
+│  ├─ performance.md              the PERF-xx rules
 │  └─ a11y.md                     how the accessibility areas are applied
 ├─ scripts/
 │  ├─ Get-ReviewTarget.ps1        step 1

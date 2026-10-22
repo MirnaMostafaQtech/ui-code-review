@@ -10,6 +10,8 @@
         target.json translations  [ { path, contentFile } ] every translation file at the reviewed
                                   version, read-only context for the I18N reviewer
         <OutDir>/translations/... their content
+        target.json assets        [ { path, sizeBytes } ] every image, font and video file the
+                                  review adds or changes, for the performance reviewer
 
     Only UI files (see $UiFilePattern) and translation files (see $TranslationPattern) are kept;
     minified, generated and test files are skipped. Each entry in files has role 'ui' or 'translation'.
@@ -49,6 +51,7 @@ $UiFilePattern = '\.(html|scss|css|ts|cshtml|js)$'
 # ngx-translate style JSON under a translations folder, and .NET resource files.
 $TranslationPattern = '((^|/)(i18n|l10n|locale|locales|lang|langs|translations)/.+\.json$)|(\.resx$)'
 $MaxTranslationFiles = 80
+$AssetPattern = '\.(png|jpe?g|gif|bmp|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp4|webm|ogg)$'
 $SkipPattern = '(\.min\.(css|js)$)|(\.spec\.ts$)|(\.d\.ts$)|(/node_modules/)|(/dist/)|(/bin/)|(/obj/)'
 
 $pat = $env:SONARTOOLKIT_TFS_PAT
@@ -134,6 +137,12 @@ function Invoke-TfsBytes([string]$Uri) {
 }
 
 $files = @()
+$assets = @()
+
+function Test-AssetFile([string]$Path) {
+    $p = $Path -replace '\\', '/'
+    return ($p -match $AssetPattern) -and ($p -notmatch $SkipPattern)
+}
 
 if ($Kind -eq 'changeset') {
     if (-not $CollectionUrl) { throw 'Get-ReviewTarget: -CollectionUrl is required for -Kind changeset (e.g. https://tfs25.alqemam.com/qCollection).' }
@@ -149,6 +158,12 @@ if ($Kind -eq 'changeset') {
     foreach ($change in $changes) {
         if (-not $project -and $change.ServerPath -match '^\$/(?<p>[^/]+)') { $project = $Matches['p'] }
         if ($change.ChangeType -match 'delete') { continue }
+        if (Test-AssetFile $change.ServerPath) {
+            $encoded = [Uri]::EscapeDataString($change.ServerPath)
+            $bytes = Invoke-TfsBytes "$CollectionUrl/_apis/tfvc/items?path=$encoded&versionDescriptor.versionType=Changeset&versionDescriptor.version=$Id&includeContent=true&api-version=5.0"
+            $assets += [pscustomobject]@{ path = $change.ServerPath; sizeBytes = $bytes.Length }
+            continue
+        }
         $role = Get-FileRole $change.ServerPath
         if (-not $role) { continue }
 
@@ -238,6 +253,11 @@ else {
         $status = $parts[0]
         $path = $parts[-1]
         if ($status -like 'D*') { continue }
+        if (Test-AssetFile $path) {
+            $size = & git -C $RepoRoot cat-file -s "$($head):$path" 2>$null
+            if ($LASTEXITCODE -eq 0) { $assets += [pscustomobject]@{ path = $path; sizeBytes = [long]"$size".Trim() } }
+            continue
+        }
         $role = Get-FileRole $path
         if (-not $role) { continue }
 
@@ -300,6 +320,7 @@ if (@($files).Count -gt 0 -and $translationPaths.Count -gt 0) {
     }
 }
 $target['translations'] = $translations
+$target['assets'] = @($assets)
 
 Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
 $targetFile = Join-Path $OutDir 'target.json'
