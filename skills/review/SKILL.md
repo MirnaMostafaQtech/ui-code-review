@@ -13,7 +13,7 @@ argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 ```
 - `pr <id>`: run from inside the Git repository the PR belongs to.
 - `changeset <id>`: needs the TFVC collection URL: `--collection`, else `$env:UI_REVIEW_TFVC_COLLECTION`,
-  else ask the user once (for example `https://tfs25.alqemam.com/qCollection`).
+  else ask the user once (for example `https://tfs.example.com/DefaultCollection`).
 - `--dry-run`: show the preview and stop; don't ask to post.
 
 Nothing is ever posted without the user's yes: Step 5 always shows the comments first and asks.

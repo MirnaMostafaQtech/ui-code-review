@@ -300,7 +300,7 @@ if ($target.kind -eq 'pr') {
     Write-Output "PR $($target.id): $posted posted, $skipped already there, $failed failed, $resolved resolved, $summaryState."
 }
 else {
-    # TFVC changeset: legacy discussion API (route discussion/threads exists on tfs25; needs a PAT
+    # TFVC changeset: legacy discussion API (route discussion/threads exists on TFS / Azure DevOps Server; needs a PAT
     # with Code (Read & Write)).
     $artifactUri = "vstfs:///VersionControl/Changeset/$($target.id)"
     $existingPrints = @{}
@@ -348,8 +348,8 @@ else {
         if ($workItems.Count -eq 0) { throw 'Publish-Findings: changeset has no linked work item to comment on.' }
 
         foreach ($wi in $workItems) {
-            # A work item can live in a different Team Project than the code (e.g. code in qElite,
-            # bugs in qManagement), so read its own project first.
+            # A work item can live in a different Team Project than the code (e.g. code in ProjectA,
+            # bugs in ProjectB), so read its own project first.
             $wiProject = (Invoke-TfsJson GET "$($target.collectionUrl)/_apis/wit/workitems/$wi`?fields=System.TeamProject&api-version=5.0" $null).fields.'System.TeamProject'
             $wiUri = "$($target.collectionUrl)/$([Uri]::EscapeDataString($wiProject))/_apis/wit/workitems/$wi`?api-version=5.0"
 

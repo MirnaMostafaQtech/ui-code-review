@@ -231,10 +231,10 @@ function Get-TfvcWorkfoldMappings {
         Get-TfvcChangedFiles already applies to `tf status`:
 
             ===============================================================================
-            Workspace : DEVWorkSpace (Hend mohamed)
-            Collection: https://tfs25.alqemam.com/gcollection
-             $/qCLP/Branches/qCLP-branch: D:\g_tfs_2025\qCLP-branch
-             $/qCMS/qCMS: D:\makeenmaster\qCMS (cloaked)
+            Workspace : DevWorkspace (Jane Doe)
+            Collection: https://tfs.example.com/DefaultCollection
+             $/ProjectA/Branches/feature: D:\tfs\ProjectA-feature
+             $/ProjectB/Main: D:\tfs\ProjectB (cloaked)
 
         Mappings are recursive by design (a mapping also covers every subfolder beneath it), so a
         cloaked mapping is kept in the returned list, tagged, rather than dropped - callers that
@@ -296,7 +296,7 @@ function Resolve-TfvcMappingForServerPath {
         Longest-prefix match: TFVC mappings are recursive (mapping $/Project also covers every
         subfolder beneath it unless a more specific mapping overrides part of that tree - the real
         workspace captured for Get-TfvcWorkfoldMappings has exactly this shape, e.g. both
-        $/qCLP/Branches/qCLP-branch and the broader $/qCLP/Branches-G_Branch are mapped
+        $/ProjectA/Branches/feature and the broader $/ProjectA/Branches are mapped
         independently), so the mapping whose ServerPath is the longest matching prefix is the one
         that actually applies - not just the first one found. Returns $null when no mapping covers
         $ServerPath at all (genuinely outside this workspace).

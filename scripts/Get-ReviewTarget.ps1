@@ -19,7 +19,7 @@
 
     Usage:
         Get-ReviewTarget.ps1 -Kind pr        -Id 123   -RepoRoot D:\repo           -OutDir <dir>
-        Get-ReviewTarget.ps1 -Kind changeset -Id 31554 -CollectionUrl https://tfs25.alqemam.com/qCollection -OutDir <dir>
+        Get-ReviewTarget.ps1 -Kind changeset -Id 31554 -CollectionUrl https://tfs.example.com/DefaultCollection -OutDir <dir>
 
     OutDir is a new folder per run (<root>/<kind>-<id>-<yyyyMMdd-HHmmss>). The script takes the
     target's review lock first (common/review-lock.ps1) and fails with REVIEW-LOCKED if another run
@@ -145,7 +145,7 @@ function Test-AssetFile([string]$Path) {
 }
 
 if ($Kind -eq 'changeset') {
-    if (-not $CollectionUrl) { throw 'Get-ReviewTarget: -CollectionUrl is required for -Kind changeset (e.g. https://tfs25.alqemam.com/qCollection).' }
+    if (-not $CollectionUrl) { throw 'Get-ReviewTarget: -CollectionUrl is required for -Kind changeset (e.g. https://tfs.example.com/DefaultCollection).' }
     $CollectionUrl = $CollectionUrl.TrimEnd('/')
     if ($CollectionUrl -notmatch '^https://') { throw 'Get-ReviewTarget: refusing to send the PAT over http; use an https:// collection URL.' }
 

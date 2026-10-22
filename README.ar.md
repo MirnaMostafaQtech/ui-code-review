@@ -23,7 +23,7 @@
 - Windows PowerShell 5.1 و Claude Code.
 - متغير بيئة اسمه `SONARTOOLKIT_TFS_PAT` فيه الـ Token بتاع TFS (نفس التوكن بتاع q-ai-quality-review). السكريبتات بتقراه من البيئة ومش بيتكتب في أي أمر.
 - لو هتراجعي PR: لازم تشغليها من جوه نسخة الريبو اللي على جهازك، ويكون الـ remote اسمه `origin` وبيبدأ بـ `https://`.
-- لو هتراجعي changeset: محتاجة رابط الـ TFVC collection، مثلًا `https://tfs25.alqemam.com/GCollection`.
+- لو هتراجعي changeset: محتاجة رابط الـ TFVC collection، مثلًا `https://tfs.example.com/DefaultCollection`.
 
 ## التثبيت
 

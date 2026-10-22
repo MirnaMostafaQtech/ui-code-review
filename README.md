@@ -21,7 +21,7 @@ Nothing is posted until you approve the preview. Everything the review needs shi
 - `SONARTOOLKIT_TFS_PAT`: a TFS Personal Access Token in an environment variable (the same token as
   q-ai-quality-review). The scripts read it from the environment; it is never passed on a command line.
 - For a PR: a local Git clone of the repository, with an `https://` TFS remote named `origin`.
-- For a changeset: the TFVC collection URL, for example `https://tfs25.alqemam.com/GCollection`.
+- For a changeset: the TFVC collection URL, for example `https://tfs.example.com/DefaultCollection`.
 
 ## Install
 
