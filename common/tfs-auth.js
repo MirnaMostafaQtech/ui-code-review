@@ -53,7 +53,7 @@ async function tfsFetch(method, uri, pat, { body, contentType = 'application/jso
     }
     catch (e) {
         const cause = e.cause && e.cause.code ? ` (${e.cause.code})` : '';
-        throw new Error(`${method} ${uri} failed: ${e.message}${cause}. Behind a company certificate or proxy, see README "Requirements".`);
+        throw new Error(`${method} ${uri} failed: ${e.message}${cause}. For a company certificate, see README "Requirements".`);
     }
     if (!response.ok) {
         const text = (await response.text().catch(() => '')).slice(0, 300);

@@ -20,9 +20,11 @@
 
 ## محتاجة إيه عشان تشتغل؟
 
-- Node.js 18 أو أحدث و Claude Code. السكريبتات بتستخدم مكتبات Node الأساسية بس، فمفيش `npm install`.
+- Node.js 18.3 أو أحدث و Claude Code. السكريبتات بتستخدم مكتبات Node الأساسية بس، فمفيش `npm install`.
 - لو شهادة HTTPS بتاعة سيرفر TFS صادرة من جهة شهادات خاصة بالشركة وNode مش واثق فيها (الطلبات بتفشل بـ
-  `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`)، صدّري شهادة الجهة دي كملف `.pem` وحطي مساره في `NODE_EXTRA_CA_CERTS`.
+  `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`)، صدّري شهادة الجهة دي كملف `.pem` وحطي مساره في `NODE_EXTRA_CA_CERTS`. ولو Node عندك 22.15 أو أحدث، ممكن بدل كده تحطي
+  `NODE_OPTIONS=--use-system-ca`، فيثق في شهادات Windows زي ما كان PowerShell بيعمل.
+- السكريبتات بتتصل بـ TFS مباشرة: Node مش بيستخدم إعدادات الـ proxy بتاعة Windows زي PowerShell، فلازم سيرفر TFS يكون متاح من غير proxy.
 - متغير بيئة اسمه `SONARTOOLKIT_TFS_PAT` فيه الـ Token بتاع TFS (نفس التوكن بتاع q-ai-quality-review). السكريبتات بتقراه من البيئة ومش بيتكتب في أي أمر.
 - لو هتراجعي PR: لازم تشغليها من جوه نسخة الريبو اللي على جهازك، ويكون الـ remote اسمه `origin` وبيبدأ بـ `https://`.
 - لو هتراجعي changeset: محتاجة رابط الـ TFVC collection، مثلًا `https://tfs.example.com/DefaultCollection`.

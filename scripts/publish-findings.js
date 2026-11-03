@@ -241,7 +241,7 @@ async function main() {
 
     // Every path below is idempotent: a re-run never repeats a line comment (fingerprint per finding),
     // and posts a new summary / work item comment only when the review signature changed.
-    const pat = getTfsPat('Publish-Findings');
+    const pat = getTfsPat('publish-findings');
     const commentText = (c) => (hasProperty(c, 'content') ? psString(getProperty(c, 'content')) : '');
     const fingerprintsIn = (text) => [...text.matchAll(new RegExp(`<!-- ${MARKER}:([0-9a-f]{16}) -->`, 'g'))].map((m) => m[1]);
     const lineKeysIn = (text) => [...text.matchAll(new RegExp(`<!-- ${MARKER}-line:([0-9a-f]{16}) -->`, 'g'))].map((m) => m[1]);
@@ -368,7 +368,7 @@ async function main() {
     catch (e) {
         warn(`Changeset comments failed (${e.message}). Falling back to the linked work item(s).`);
         const workItems = jsonItems(target.workItems);
-        if (workItems.length === 0) throw new Error('Publish-Findings: changeset has no linked work item to comment on.');
+        if (workItems.length === 0) throw new Error('publish-findings: changeset has no linked work item to comment on.');
 
         for (const wi of workItems) {
             // A work item can live in a different Team Project than the code (e.g. code in ProjectA,

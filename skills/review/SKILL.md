@@ -12,7 +12,7 @@ argument-hint: pr <id> | changeset <id> [--collection <url>] [--dry-run]
 /ui-code-review:review changeset <id> [--collection <url>] [--dry-run]
 ```
 - `pr <id>`: run from inside the Git repository the PR belongs to.
-- `changeset <id>`: needs the TFVC collection URL: `--collection`, else `$env:UI_REVIEW_TFVC_COLLECTION`,
+- `changeset <id>`: needs the TFVC collection URL: `--collection`, else the `UI_REVIEW_TFVC_COLLECTION` environment variable,
   else ask the user once (for example `https://tfs.example.com/DefaultCollection`).
 - `--dry-run`: show the preview and stop; don't ask to post.
 
@@ -23,7 +23,7 @@ Requires `SONARTOOLKIT_TFS_PAT` (same token as q-ai-quality-review). The AXIS ru
 inside this plugin. Never print or pass the token on a command line; the scripts read it from the
 environment.
 
-All scripts are Node.js (18 or later, no npm packages); run them as
+All scripts are Node.js (18.3 or later, no npm packages); run them as
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/<script>.js" ...`.
 
 ## Step 1: Build the review target

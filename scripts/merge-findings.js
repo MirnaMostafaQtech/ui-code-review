@@ -73,7 +73,7 @@ function main() {
     const target = JSON.parse(readAllText(joinPath(outDir, 'target.json')));
     const targetPaths = (target.files || []).map((t) => psString(t.path));
     const reviewDir = joinPath(outDir, 'reviews');
-    if (!fs.existsSync(reviewDir)) throw new Error(`Merge-Findings: no reviews folder at '${reviewDir}'.`);
+    if (!fs.existsSync(reviewDir)) throw new Error(`merge-findings: no reviews folder at '${reviewDir}'.`);
 
     // Paths compare case-insensitively, as in a PowerShell hashtable.
     const changedByPath = new Map();

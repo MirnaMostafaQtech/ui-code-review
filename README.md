@@ -17,7 +17,7 @@ Nothing is posted until you approve the preview. Everything the review needs shi
 
 ## Requirements
 
-- Node.js 18 or later and Claude Code. The scripts use only Node's own modules: there is nothing to
+- Node.js 18.3 or later and Claude Code. The scripts use only Node's own modules: there is nothing to
   `npm install`.
 - `SONARTOOLKIT_TFS_PAT`: a TFS Personal Access Token in an environment variable (the same token as
   q-ai-quality-review). The scripts read it from the environment; it is never passed on a command line.
@@ -25,7 +25,11 @@ Nothing is posted until you approve the preview. Everything the review needs shi
 - For a changeset: the TFVC collection URL, for example `https://tfs.example.com/DefaultCollection`.
 - If the TFS server's HTTPS certificate comes from a company certificate authority that Node doesn't
   trust (requests fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` or `SELF_SIGNED_CERT_IN_CHAIN`), export
-  that authority as a `.pem` file and set `NODE_EXTRA_CA_CERTS` to its path.
+  that authority as a `.pem` file and set `NODE_EXTRA_CA_CERTS` to its path. On Node 22.15 or later you
+  can instead set `NODE_OPTIONS=--use-system-ca`, which makes Node trust the Windows certificate store as
+  PowerShell did.
+- The scripts connect to TFS directly: unlike PowerShell, Node doesn't use the Windows proxy settings.
+  The TFS server must be reachable without a proxy.
 
 ## Install
 
@@ -73,8 +77,8 @@ The bundled AXIS skill shows up as `ui-code-review:axis-scss`, and the accessibi
 
 ```
 1. Build target   →  2. Pick reviewers  →  3. Review (parallel)  →  4. Merge  →  5. Preview → approve → post
-Get-ReviewTarget     by file type and       AXIS, I18N, SEC,        Merge-       Publish-Findings
-                     pre-scans              PERF, a11y areas        Findings
+get-review-target    by file type and       AXIS, I18N, SEC,        merge-       publish-findings
+                     pre-scans              PERF, a11y areas        findings
 ```
 
 Every run writes its working files to its own folder,
@@ -236,7 +240,7 @@ ui-code-review/
 
 | Problem | Cause and fix |
 |---|---|
-| `fetch failed` / `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` | Node doesn't trust the TFS certificate. Set `NODE_EXTRA_CA_CERTS` to the company CA `.pem` (see Requirements). |
+| `fetch failed` / `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` | Node doesn't trust the TFS certificate. Set `NODE_EXTRA_CA_CERTS` to the company CA `.pem`, or on Node 22.15+ set `NODE_OPTIONS=--use-system-ca` (see Requirements). |
 | `not a git repository` on `pr` | Run the review from inside the repository's local clone. |
 | Work item not found / 404 | The work item is in another collection. Use the right one in `--collection`. |
 | `401 Unauthorized` on changeset comments | The PAT can't comment on changesets in that collection. The review falls back to the work item; to comment on the changeset itself, extend the PAT's permissions. |
