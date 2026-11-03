@@ -23,8 +23,8 @@ Requires `SONARTOOLKIT_TFS_PAT` (same token as q-ai-quality-review). The AXIS ru
 inside this plugin. Never print or pass the token on a command line; the scripts read it from the
 environment.
 
-All scripts are Windows PowerShell; run them as
-`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/<script>.ps1" ...`.
+All scripts are Node.js (18 or later, no npm packages); run them as
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/<script>.js" ...`.
 
 ## Step 1: Build the review target
 
@@ -32,22 +32,22 @@ Output folder: `<OutDir>` = `%TEMP%\ui-code-review\<kind>-<id>-<yyyyMMdd-HHmmss>
 run (use the current time). Never reuse or delete another run's folder: another review of the same
 target may be using it.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Get-ReviewTarget.ps1" -Kind pr -Id <id> -RepoRoot "<repo root>" -OutDir "<OutDir>"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Get-ReviewTarget.ps1" -Kind changeset -Id <id> -CollectionUrl "<collection url>" -OutDir "<OutDir>"
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/get-review-target.js" --kind pr --id <id> --repo-root "<repo root>" --out-dir "<OutDir>"
+node "${CLAUDE_PLUGIN_ROOT}/scripts/get-review-target.js" --kind changeset --id <id> --collection-url "<collection url>" --out-dir "<OutDir>"
 ```
 
 **One review per target at a time.** The script takes a lock for the PR / changeset. If it fails with
 `REVIEW-LOCKED`, another review of the same target is running: tell the user when it started and stop.
-Don't retry and don't touch that run's folder. Run again with `-Force` only if the user confirms that
+Don't retry and don't touch that run's folder. Run again with `--force` only if the user confirms that
 review is no longer running (for example a window that was closed mid-review). A lock older than 2
 hours is taken over automatically.
 
 From here on, the review holds the lock until it ends. **Every way the review ends** (Step 5 done,
 the user declines, a large change they don't want, an error after Step 1) finishes with:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Release-ReviewLock.ps1" -OutDir "<OutDir>"
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/release-review-lock.js" --out-dir "<OutDir>"
 ```
 
 Read `<OutDir>/target.json`. Each entry in `files` has `path` (repo or server path), `contentFile` (the
@@ -150,8 +150,8 @@ Don't convert or edit the replies yourself. Save each reviewer's reply **exactly
 Then build `findings.json` with fixed rules (same replies → same findings → no duplicate comments on a
 re-run):
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Merge-Findings.ps1" -OutDir "<OutDir>"
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.js" --out-dir "<OutDir>"
 ```
 
 It prints the count per reviewer and a warning for every finding it had to drop (a reply that is not
@@ -160,10 +160,10 @@ starts with "none" or "optional"); mention those drops to the user in Step 5.
 
 ## Step 5: Preview, ask, then publish
 
-**5a. Preview (always).** Run with `-DryRun`:
+**5a. Preview (always).** Run with `--dry-run`:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/Publish-Findings.ps1" -TargetFile "<OutDir>\target.json" -FindingsFile "<OutDir>\findings.json" -DryRun
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/publish-findings.js" --target-file "<OutDir>\target.json" --findings-file "<OutDir>\findings.json" --dry-run
 ```
 
 It keeps only findings on changed lines and writes `<OutDir>/comments.json` (the inline comments
@@ -178,7 +178,7 @@ With `--dry-run`, release the lock and stop here. Otherwise ask the user whether
 If they want changes first (drop a comment, change wording), edit `<OutDir>/findings.json` (not the
 reviews), run 5a again and show the new preview.
 
-**5b. Post (only after the user says yes).** Run the same command without `-DryRun`. It posts:
+**5b. Post (only after the user says yes).** Run the same command without `--dry-run`. It posts:
 - **PR:** an inline comment per line + one summary comment. Comments already on the PR are not
   repeated. A thread is marked Fixed only when its finding is gone and the line it was on was changed
   or removed; a finding that just wasn't repeated on an unchanged line leaves its thread open.

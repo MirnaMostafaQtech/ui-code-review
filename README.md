@@ -17,11 +17,15 @@ Nothing is posted until you approve the preview. Everything the review needs shi
 
 ## Requirements
 
-- Windows PowerShell 5.1 and Claude Code.
+- Node.js 18 or later and Claude Code. The scripts use only Node's own modules: there is nothing to
+  `npm install`.
 - `SONARTOOLKIT_TFS_PAT`: a TFS Personal Access Token in an environment variable (the same token as
   q-ai-quality-review). The scripts read it from the environment; it is never passed on a command line.
 - For a PR: a local Git clone of the repository, with an `https://` TFS remote named `origin`.
 - For a changeset: the TFVC collection URL, for example `https://tfs.example.com/DefaultCollection`.
+- If the TFS server's HTTPS certificate comes from a company certificate authority that Node doesn't
+  trust (requests fail with `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` or `SELF_SIGNED_CERT_IN_CHAIN`), export
+  that authority as a `.pem` file and set `NODE_EXTRA_CA_CERTS` to its path.
 
 ## Install
 
@@ -80,12 +84,12 @@ older than 7 days are deleted at the start of a run.
 ### One review per PR or changeset at a time
 
 Step 1 takes a lock, `%TEMP%\ui-code-review\<pr|changeset>-<id>.lock`, and the review releases it when
-it ends (`scripts/Release-ReviewLock.ps1`). A second review of the same PR or changeset started in the
+it ends (`scripts/release-review-lock.js`). A second review of the same PR or changeset started in the
 meantime stops with `REVIEW-LOCKED` and says when the first one started, instead of overwriting its
 results. A lock older than 2 hours is treated as left behind by a review that didn't finish and is
-taken over; for a younger one, the review asks you first and then takes it over with `-Force`.
+taken over; for a younger one, the review asks you first and then takes it over with `--force`.
 
-### 1. Build the review target: `scripts/Get-ReviewTarget.ps1`
+### 1. Build the review target: `scripts/get-review-target.js`
 
 - **PR:** reads the PR from the server, fetches its source and target branches, and diffs the merge
   base against the PR head.
@@ -134,7 +138,7 @@ them. Each one:
 AXIS and Angular reply with a JSON list; accessibility agents reply in the accessibility-framework
 area format (`Area:` / `Findings:` / `OutOfScope:`). Each reply is saved unchanged to `reviews\<name>.txt`.
 
-### 4. Merge: `scripts/Merge-Findings.ps1`
+### 4. Merge: `scripts/merge-findings.js`
 
 Turns the replies into one `findings.json` with fixed rules, so the same replies always give the same
 findings:
@@ -150,9 +154,9 @@ findings:
   - its fix starts with "none" or "optional".
 - Exact duplicates (same rule, file and line) are kept once.
 
-### 5. Preview, approve, post: `scripts/Publish-Findings.ps1`
+### 5. Preview, approve, post: `scripts/publish-findings.js`
 
-With `-DryRun` it writes the preview and posts nothing:
+With `--dry-run` it writes the preview and posts nothing:
 
 - `comments.json`: the inline comments exactly as they would be posted.
 - `report.md`: the summary comment.
@@ -161,7 +165,7 @@ Which findings become comments:
 
 - Only findings on changed lines are kept.
 - Every Error gets an inline comment.
-- Warnings get inline comments up to `-MaxWarnings` (15 by default), chosen by priority:
+- Warnings get inline comments up to `--max-warnings` (15 by default), chosen by priority:
   security, accessibility, localization, AXIS, then images and assets, taking one finding per rule in turn so one repeated
   rule can't fill every slot. Any beyond that appear in the summary only.
 - Info appears in the summary only.
@@ -215,27 +219,31 @@ ui-code-review/
 │  ├─ performance.md              the PERF-xx rules
 │  └─ a11y.md                     how the accessibility areas are applied
 ├─ scripts/
-│  ├─ Get-ReviewTarget.ps1        step 1
-│  ├─ Merge-Findings.ps1          step 4
-│  ├─ Publish-Findings.ps1        step 5
-│  └─ Release-ReviewLock.ps1      ends the review: releases the lock
-├─ scm-adapters/                  Git, TFVC, PR and work item API helpers
+│  ├─ get-review-target.js        step 1
+│  ├─ merge-findings.js           step 4
+│  ├─ publish-findings.js         step 5
+│  └─ release-review-lock.js      ends the review: releases the lock
+├─ scm-adapters/
+│  └─ tfs.js                      PR, Git remote and TFVC changeset lookups
 └─ common/
-   ├─ tfs-auth.ps1                TFS PAT authentication header
-   └─ review-lock.ps1             one review per PR / changeset at a time
+   ├─ tfs-auth.js                 TFS PAT authentication and REST calls
+   ├─ review-lock.js              one review per PR / changeset at a time
+   ├─ dotnet-compat.js            keeps results identical to the PowerShell scripts (fingerprints, order)
+   └─ cli.js                      arguments, warnings and exit codes
 ```
 
 ## Troubleshooting
 
 | Problem | Cause and fix |
 |---|---|
+| `fetch failed` / `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` | Node doesn't trust the TFS certificate. Set `NODE_EXTRA_CA_CERTS` to the company CA `.pem` (see Requirements). |
 | `not a git repository` on `pr` | Run the review from inside the repository's local clone. |
 | Work item not found / 404 | The work item is in another collection. Use the right one in `--collection`. |
 | `401 Unauthorized` on changeset comments | The PAT can't comment on changesets in that collection. The review falls back to the work item; to comment on the changeset itself, extend the PAT's permissions. |
 | Comments are not posted on the PR | Check the post step's output. **`401` / `403`**: the PAT needs **Code (Read & Write)**, and your account needs permission to contribute to pull requests in that repository; create a new PAT with that scope. **`already there`**: they were posted by an earlier run and are not repeated. **`Dry run: nothing posted`**: the run used `--dry-run`, or the preview was not approved; run again and answer yes. **`Comment on <file>:<line> failed`** for some lines only: the PR got new commits after the review started, so run the review again. |
 | AXIS skipped | `skills/axis-scss/docs` is missing from the installed plugin. Reinstall it from the full package. |
 | An accessibility area skipped | `agents/accessibility-*.md` or `references/` is missing from the installed plugin. Reinstall it from the full package. |
-| `REVIEW-LOCKED` | Another review of the same PR or changeset is running. Wait for it to finish. If it isn't running any more (its window was closed mid-review), tell the review so and it takes the lock over with `-Force`. |
+| `REVIEW-LOCKED` | Another review of the same PR or changeset is running. Wait for it to finish. If it isn't running any more (its window was closed mid-review), tell the review so and it takes the lock over with `--force`. |
 
 ## Known limits
 
