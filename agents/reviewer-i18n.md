@@ -19,11 +19,15 @@ point to, never other files on the machine. Never copy a secret value into your 
 ## Input (in the prompt that invoked you)
 
 - `Rules:` the path of `i18n.md`.
-- `Files:` a list of `{ path, role, contentFile, changedLines }`. `role` is `ui` (template, view or
-  script) or `translation` (a language file). `contentFile` is the full new file on disk;
-  `changedLines` are 1-based inclusive ranges on that file.
-- `Translations:` a list of `{ path, contentFile }`: every translation file of the project at the
-  reviewed version, read-only. It can be empty (the project has none, or none were found).
+- `Target:` the path of the review's `target.json`.
+- `Files:` the paths to review, one per line, exactly as `path` in `target.json`.
+
+Read `Target` first. For each path in `Files`, its entry in `files` gives `role`, `contentFile` and
+`changedLines`. `role` is `ui` (template, view or script) or `translation` (a language file).
+`contentFile` is the full new file on disk; `changedLines` are 1-based inclusive ranges on that file.
+`Translations` below means the `translations` array of `target.json`: `{ path, contentFile }` for
+every translation file of the project at the reviewed version, read-only. It can be empty (the
+project has none, or none were found).
 
 ## Steps
 

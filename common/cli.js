@@ -10,10 +10,11 @@
 
 const { parseArgs } = require('util');
 
-// options: { name: { type: 'string' | 'boolean', required?, default? } }
+// options: { name: { type: 'string' | 'boolean', required?, default?, multiple? } }
+// A `multiple` option may be given more than once and comes back as an array.
 function parseCli(script, options) {
     const config = {};
-    for (const [name, o] of Object.entries(options)) config[name] = { type: o.type };
+    for (const [name, o] of Object.entries(options)) config[name] = { type: o.type, multiple: !!o.multiple };
     let values;
     try {
         ({ values } = parseArgs({ options: config, strict: true, allowPositionals: false }));

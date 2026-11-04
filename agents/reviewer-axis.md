@@ -18,11 +18,13 @@ point to, never other files on the machine. Never copy a secret value into your 
 ## Input (in the prompt that invoked you)
 
 - `AXIS docs:` the folder of the axis-scss skill's `docs/`.
-- `Files:` a list of `{ path, contentFile, changedLines }`. `contentFile` is the full new file on
-  disk; `changedLines` are 1-based inclusive ranges on that file.
+- `Target:` the path of the review's `target.json`.
+- `Files:` the paths to review, one per line, exactly as `path` in `target.json`.
 
 ## Steps
 
+0. Read `Target`. For each path in `Files`, its entry in `files` gives `contentFile` (the full new
+   file on disk) and `changedLines` (1-based inclusive ranges on that file). Review only those paths.
 1. Read `<AXIS docs>/guides/rules.md` and `<AXIS docs>/guides/review-checklist.md`. Open
    `<AXIS docs>/guides/accessibility.md` (stylesheet rules) and `<AXIS docs>/segments/<segment>.md` only
    when a changed line needs them.

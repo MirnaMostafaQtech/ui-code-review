@@ -140,12 +140,23 @@ them. Each one:
 - gives one exact line per finding.
 
 AXIS and Angular reply with a JSON list; accessibility agents reply in the accessibility-framework
-area format (`Area:` / `Findings:` / `OutOfScope:`). Each reply is saved unchanged to `reviews\<name>.txt`.
+area format (`Area:` / `Findings:` / `OutOfScope:`).
+
+Prompts are short: each one names `target.json` and the paths to review, and the reviewer reads each
+file's content, changed lines, the translations and the assets from `target.json` itself. Nothing is
+repeated from prompt to prompt.
 
 ### 4. Merge: `scripts/merge-findings.js`
 
-Turns the replies into one `findings.json` with fixed rules, so the same replies always give the same
-findings:
+Given `--agent <name>=<agentId>` for each reviewer that ran, the script first reads every reply,
+unchanged, from that reviewer's Claude Code subagent log
+(`~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl`) and saves it to
+`reviews\<name>.txt`. Nobody retypes a reply. It refuses an id that belongs to a different reviewer or
+that hasn't finished. That log layout is Claude Code's, not a published interface: if a reply can't be
+read, the script stops and names it, and the reply is saved to `reviews\<name>.txt` by hand instead.
+
+It then turns the replies into one `findings.json` with fixed rules, so the same replies always give
+the same findings:
 
 - Accessibility findings become `A11Y-<AREA>` Warnings. When the agent says a runtime check is needed,
   the comment says so.
@@ -233,6 +244,7 @@ ui-code-review/
    ├─ tfs-auth.js                 TFS PAT authentication and REST calls
    ├─ review-lock.js              one review per PR / changeset at a time
    ├─ dotnet-compat.js            keeps results identical to the PowerShell scripts (fingerprints, order)
+   ├─ agent-replies.js            reads each reviewer's reply from its Claude Code subagent log
    └─ cli.js                      arguments, warnings and exit codes
 ```
 

@@ -23,6 +23,27 @@ docs — everything you need is below. Open the idiom reference of the target's 
 `${CLAUDE_PLUGIN_ROOT}/references/accessibility-core/stacks/mvc-dotnet/idioms.md` (ASP.NET MVC) — **only**
 if you hit a pattern you cannot express confidently, and then only that section.
 
+## When invoked by the ui-code-review review skill
+
+The invocation then gives `Target:` (the path of the review's `target.json`) and `Files:` (the paths
+to audit, one per line, each with its stack, for example `src/app/x.component.html (Angular)`). Read
+`Target` first: for each listed path, its entry in `files` gives `contentFile` (the full new file on
+disk, the one to read) and `changedLines` (1-based inclusive ranges on it). Every other entry in
+`files` is a **context file** (read-only): open its `contentFile` when a finding depends on it, for
+example a component's `.ts` or a child component.
+
+In this mode:
+- Audit only the listed files. Report only findings on the changed lines.
+- Under `Findings:`, list only defects that need a code change. Put observations, "no defect",
+  optional or low-priority suggestions under `OutOfScope:`.
+- If a finding depends on code in another file, read that file first (a listed or context file). If
+  you can't open the file that decides it, put the finding under `OutOfScope:`.
+- Give `location` as one line number in `contentFile`: the line of the element at fault, not the
+  start of the block around it. If the same defect is on several lines, give one finding per line.
+- Text written in code instead of a translation key, or a missing translation, is the I18N reviewer's:
+  don't report it. Report a missing or wrong accessible name only when no text, translated or not,
+  provides it.
+
 ## Stack — decide before auditing
 
 Your area is the same on every UI stack; the syntax of a fix is not. The invocation states the stack of

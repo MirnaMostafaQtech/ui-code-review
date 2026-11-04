@@ -28,13 +28,21 @@
     finding (from any reviewer) whose message says it is not a defect or unverified, or whose fix
     starts with "none" or "optional".
 
+    Getting the replies: with --agent <name>=<agentId> (once per reviewer that ran), the script reads each
+    reviewer's final reply from its Claude Code subagent log (common/agent-replies.js) and writes it to
+    reviews/<name>.txt itself, so nobody retypes it. <name> is the reply file name without .txt (axis,
+    i18n, security, performance, a11y-labels, a11y-alt, a11y-aria, a11y-semantics, a11y-keyboard). If a
+    reply can't be read, the script stops and names it; save that reply by hand to reviews/<name>.txt and
+    run again without its --agent. Replies already in reviews/ are used as they are.
+
     Usage:
-        node merge-findings.js --out-dir <dir>
+        node merge-findings.js --out-dir <dir> [--agent <name>=<agentId> ...] [--subagents-dir <dir>]
 */
 'use strict';
 
 const fs = require('fs');
 const { parseCli, warn, run } = require('../common/cli');
+const { readAgentReply } = require('../common/agent-replies');
 const {
     trim, trimEnd, trimChars, readAllText, writeUtf8, joinPath, leafName, psString, getProperty,
     sortBy, parseJsonLikePowerShell, jsonItems,
@@ -68,11 +76,42 @@ const AREA_RULE = {
 const lowerEq = (a, b) => a.toLowerCase() === b.toLowerCase();
 
 function main() {
-    const { 'out-dir': outDir } = parseCli('merge-findings', { 'out-dir': { type: 'string', required: true } });
+    const {
+        'out-dir': outDir,
+        agent: agentSpecs = [],
+        'subagents-dir': subagentsDir,
+    } = parseCli('merge-findings', {
+        'out-dir': { type: 'string', required: true },
+        agent: { type: 'string', multiple: true },
+        'subagents-dir': { type: 'string' },
+    });
 
     const target = JSON.parse(readAllText(joinPath(outDir, 'target.json')));
     const targetPaths = (target.files || []).map((t) => psString(t.path));
     const reviewDir = joinPath(outDir, 'reviews');
+
+    // Copy each reviewer's reply from its log, unchanged. All or nothing: a reviewer whose reply can't be
+    // read must not silently drop out of the review.
+    if (agentSpecs.length > 0) {
+        const replies = [];
+        const failed = [];
+        for (const spec of agentSpecs) {
+            const m = String(spec).match(/^\s*([a-z0-9-]+)\s*=\s*(\S+)\s*$/i);
+            if (!m) { failed.push(`'${spec}': expected <name>=<agentId>`); continue; }
+            const name = m[1].toLowerCase();
+            try { replies.push({ name, text: readAgentReply(name, m[2], subagentsDir) }); }
+            catch (e) { failed.push(`${name}: ${e.message}`); }
+        }
+        if (failed.length > 0) {
+            throw new Error(`merge-findings: could not read these replies from the agent logs:\n  ${failed.join('\n  ')}\n`
+                + 'Save each of them by hand to reviews/<name>.txt and run again without its --agent.');
+        }
+        fs.mkdirSync(reviewDir, { recursive: true });
+        for (const r of replies) {
+            writeUtf8(joinPath(reviewDir, `${r.name}.txt`), r.text);
+            process.stdout.write(`Reply read from log: reviews/${r.name}.txt\n`);
+        }
+    }
     if (!fs.existsSync(reviewDir)) throw new Error(`merge-findings: no reviews folder at '${reviewDir}'.`);
 
     // Paths compare case-insensitively, as in a PowerShell hashtable.

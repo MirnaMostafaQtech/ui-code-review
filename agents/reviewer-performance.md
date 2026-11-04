@@ -19,18 +19,21 @@ point to, never other files on the machine. Never copy a secret value into your 
 ## Input (in the prompt that invoked you)
 
 - `Rules:` the path of `performance.md`.
-- `Files:` a list of `{ path, contentFile, changedLines }`. `contentFile` is the full new file on
-  disk; `changedLines` are 1-based inclusive ranges on that file.
-- `Assets:` the `assets` array of target.json: `{ path, sizeBytes }` for every image, font and video
-  file the review adds or changes. It can be empty.
+- `Target:` the path of the review's `target.json`.
+- `Files:` the paths to review, one per line, exactly as `path` in `target.json`.
+
+Read `Target` first. For each path in `Files`, its entry in `files` gives `contentFile` (the full new
+file on disk) and `changedLines` (1-based inclusive ranges on that file). `Assets` below means the
+`assets` array of `target.json`: `{ path, sizeBytes }` for every image, font and video file the
+review adds or changes. It can be empty.
 
 ## Steps
 
 1. Read the rules file. Follow its "How the reviewer uses this file" section exactly.
 2. For each file, read `contentFile` and check every changed line against the rules. Read the lines
    around a changed `<img>` to see the container it is in (a loop, a modal, a table row) and the
-   classes on it; Grep the component's stylesheet in the files you were given when a class may fix
-   its size.
+   classes on it; Grep the component's stylesheet (its `contentFile` in `target.json`) when a class
+   may fix its size.
 3. To match an image path on a changed line with `Assets`, compare the end of the path (the file
    name and its folder), since one is a URL and the other a repository path.
 4. Report a violation only if it is **on a changed line** and you can point to the exact code.

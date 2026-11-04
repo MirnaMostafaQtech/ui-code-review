@@ -19,10 +19,13 @@ point to, never other files on the machine. Never copy a secret value into your 
 ## Input (in the prompt that invoked you)
 
 - `Rules:` the path of `security.md`.
-- `Files:` a list of `{ path, contentFile, changedLines }`. `contentFile` is the full new file on
-  disk; `changedLines` are 1-based inclusive ranges on that file.
-- `Context files (read-only):` the other files in the review (`path` and `contentFile`), for
-  following a value to where it is set.
+- `Target:` the path of the review's `target.json`.
+- `Files:` the paths to review, one per line, exactly as `path` in `target.json`.
+
+Read `Target` first. For each path in `Files`, its entry in `files` gives `contentFile` (the full new
+file on disk) and `changedLines` (1-based inclusive ranges on that file). Every other `role: ui` entry
+in `files` is a **context file** (read-only): open its `contentFile` to follow a value to where it is
+set, but don't report on it.
 
 ## Steps
 
