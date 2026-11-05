@@ -39,6 +39,11 @@ Read `Target` first. It gives you:
    - Bug: the screens / cases in the repro steps and the expected result (often only in the title
      or the last step - read the title as part of the expected result).
    - User Story: each acceptance criterion, one by one.
+   - **Only what the work item says.** Every criterion comes from the title, the description, the
+     repro steps, the expected result or the acceptance criteria. Don't add screens or steps the
+     work item doesn't name, and don't follow the flow past its last step (the next page or dialog
+     after the screen the work item is about). If you think a related screen may also be affected,
+     say so in `summary`, not as a criterion.
    - **Design match** ("matches Figma / the design", exact spacing, colours, fonts) is **not** a
      criterion unless your prompt has a `Figma:` line. Without it, judge what the work item asks to
      change (the screen, the layout, the elements, the behaviour), and don't let the missing design

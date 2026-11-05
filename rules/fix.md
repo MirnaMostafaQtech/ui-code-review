@@ -39,6 +39,10 @@ with `Figma:`) has `"kind": "design"` and no evidence.
 ## How the reviewer uses this file
 
 - One verdict per work item, always, even when there are no inline findings.
+- Criteria come only from the work item: its title, description, repro steps, expected result and
+  acceptance criteria. A screen or step it doesn't name (the next page in the flow, a related
+  dialog) is out of scope: it is never a criterion and never makes the item `Partial` or `Unclear`.
+  Mention a possible related impact in `summary` only.
 - Inline findings only on a line in a reviewed file's `changedLines` (`files` in target.json). A gap in a
   file outside that list (a service, an API, a config) goes in the verdict's `summary` and
   `criteria`, not in `findings`.
