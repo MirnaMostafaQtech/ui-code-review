@@ -13,6 +13,11 @@
         <outDir>/translations/... their content
         target.json assets        [ { path, sizeBytes } ] every image, font and video file the
                                   review adds or changes, for the performance reviewer
+        target.json fixWorkItems  [ { id, type, title, state, file } ] the linked Bugs / User Stories,
+                                  each as <outDir>/workitems/<id>.md, for the fix reviewer
+        target.json fullDiff      { file, files, truncated, omitted } <outDir>/full.diff: the diff of
+                                  EVERY changed file (not only UI), capped at 3000 lines; null when
+                                  there is no Bug / User Story. fixCheckSkipped says why it was skipped.
 
     Only UI files (UI_FILE_PATTERN) and translation files (TRANSLATION_PATTERN) are kept; minified,
     generated and test files are skipped. Each entry in files has role 'ui' or 'translation'.
@@ -21,6 +26,7 @@
     Usage:
         node get-review-target.js --kind pr        --id 123   --repo-root D:\repo --out-dir <dir>
         node get-review-target.js --kind changeset --id 31554 --collection-url https://tfs.example.com/DefaultCollection --out-dir <dir>
+        --no-fix-check   don't read work items or build full.diff
 
     outDir is a new folder per run (<root>/<kind>-<id>-<yyyyMMdd-HHmmss>). The script takes the
     target's review lock first (common/review-lock.js) and fails with REVIEW-LOCKED if another run
@@ -38,7 +44,7 @@ const { spawnSync } = require('child_process');
 const { parseCli, warn, run } = require('../common/cli');
 const { getTfsPat, tfsJson, tfsBytes } = require('../common/tfs-auth');
 const { enterReviewLock, exitReviewLock } = require('../common/review-lock');
-const { getTfsRemoteInfo, getTfsPullRequest, getTfvcChangesetChanges } = require('../scm-adapters/tfs');
+const { getTfsRemoteInfo, getTfsPullRequest, getTfvcChangesetChanges, getPullRequestWorkItemIds, getWorkItems } = require('../scm-adapters/tfs');
 const { readAllText, writeUtf8, utf8BytesToText, escapeDataString, joinPath, psString } = require('../common/dotnet-compat');
 
 const UI_FILE_PATTERN = /\.(html|scss|css|ts|cshtml|js)$/i;
@@ -101,6 +107,118 @@ function wholeFileRange(text) {
     return [[1, Math.max(1, text.split('\n').length)]];
 }
 
+// ---- Fix check context: linked Bugs / User Stories and the full diff of the change ----------------
+
+// The work item types the fix check reads: Bug (repro steps) and the backlog types that carry
+// acceptance criteria (Agile: User Story, Scrum: Product Backlog Item, CMMI: Requirement).
+const FIX_WORK_ITEM_TYPES = /^(bug|user story|product backlog item|requirement)$/i;
+const MAX_FULL_DIFF_LINES = 3000;
+const MAX_CHANGESET_DIFF_FILES = 80;
+// Generated or vendored files that only add noise to the diff the fix reviewer reads.
+const DIFF_NOISE_PATTERN = /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|packages\.lock\.json)$|\.min\.(css|js)$|\.map$|(^|\/)(node_modules|dist|bin|obj|wwwroot\/lib)\//i;
+
+// Work item HTML (TFS stores rich text as HTML) to plain text, keeping line and list structure.
+function htmlToText(html) {
+    return String(html || '')
+        .replace(/\r/g, '')
+        .replace(/<\s*(br|\/p|\/div|\/h[1-6]|\/tr|\/ul|\/ol)\s*\/?>/gi, '\n')
+        .replace(/<\s*(p|div|h[1-6]|tr)(\s[^>]*)?>/gi, '\n')
+        .replace(/<\s*li[^>]*>/gi, '\n- ')
+        .replace(/<\s*\/(td|th)\s*>/gi, ' | ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/&amp;/gi, '&')
+        .split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trimEnd()).join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+// Repro steps often carry test logins. The fix reviewer never needs a secret, and anything in these files
+// can end up in a PR comment, so the value after a password / token / secret label is replaced.
+const SECRET_LABEL_PATTERN = /((?:password|passwd|pwd|pass|otp|pin|token|secret|api[-_ ]?key|كلمة\s*(?:ال)?مرور|كلمة\s*السر|الرقم\s*السري|رمز\s*التحقق)\s*[:：=]\s*)\S+/giu;
+function redactSecrets(text) {
+    return String(text).replace(SECRET_LABEL_PATTERN, '$1[redacted]');
+}
+
+function workItemMarkdown(wi) {
+    const section = (name, html) => {
+        const text = redactSecrets(htmlToText(html));
+        return text ? [`## ${name}`, '', text, ''] : [];
+    };
+    return [
+        `# ${wi.type} ${wi.id}: ${wi.title}`,
+        '',
+        `State: ${wi.state || 'unknown'}`,
+        '',
+        ...section('Description', wi.description),
+        ...section('Repro steps', wi.reproSteps),
+        ...section('Acceptance criteria', wi.acceptanceCriteria),
+    ].join('\n');
+}
+
+// Writes <outDir>/workitems/<id>.md for each linked Bug / User Story; returns the target.json entries.
+async function exportFixWorkItems({ outDir, collectionUrl, ids, pat }) {
+    const items = (await getWorkItems({ collectionUrl, ids, pat })).filter((wi) => FIX_WORK_ITEM_TYPES.test(wi.type));
+    if (items.length === 0) return [];
+    const dir = joinPath(outDir, 'workitems');
+    fs.mkdirSync(dir, { recursive: true });
+    return items.map((wi) => {
+        const file = joinPath(dir, `${wi.id}.md`);
+        writeUtf8(file, workItemMarkdown(wi));
+        return { id: wi.id, type: wi.type, title: wi.title, state: wi.state, file, figmaLinks: figmaLinksIn(wi) };
+    });
+}
+
+// Figma design links written in a work item (text or href), so the review can point out that a
+// --figma check is possible. They are never opened unless the user passes --figma.
+function figmaLinksIn(wi) {
+    const text = [wi.description, wi.reproSteps, wi.acceptanceCriteria].map((s) => String(s || '')).join(' ').replace(/&amp;/gi, '&');
+    const links = text.match(/https:\/\/(?:www\.)?figma\.com\/(?:design|file|proto)\/[A-Za-z0-9]+[^\s"'<>)]*/g) || [];
+    return [...new Set(links)];
+}
+
+/*
+    Writes <outDir>/full.diff from per-file diff chunks ({ path, text }). Keeps it under
+    MAX_FULL_DIFF_LINES: chunks whose path shares a word with a work item title go first, the rest in
+    their original order; whole chunks only, and the files left out are listed at the end.
+*/
+function writeFullDiff(outDir, chunks, workItems) {
+    const words = new Set();
+    for (const wi of workItems) {
+        for (const w of String(wi.title).toLowerCase().split(/[^\p{L}\p{N}]+/u)) if (w.length >= 4) words.add(w);
+    }
+    const score = (p) => [...words].filter((w) => p.toLowerCase().includes(w)).length;
+    const kept = chunks.filter((c) => !DIFF_NOISE_PATTERN.test(slashes(c.path)));
+    const ordered = kept.map((c, i) => ({ c, i, s: score(c.path) })).sort((a, b) => (b.s - a.s) || (a.i - b.i)).map((x) => x.c);
+
+    const out = [];
+    const omitted = [];
+    let lines = 0;
+    for (const chunk of ordered) {
+        const n = chunk.text.split('\n').length;
+        if (lines + n > MAX_FULL_DIFF_LINES) { omitted.push(chunk.path); continue; }
+        out.push(chunk.text.replace(/\n?$/, '\n'));
+        lines += n;
+    }
+    if (omitted.length > 0) {
+        out.push(`\n# Diff truncated at ${MAX_FULL_DIFF_LINES} lines. Changed files not shown above:\n${omitted.map((p) => `#   ${p}`).join('\n')}\n`);
+    }
+    const file = joinPath(outDir, 'full.diff');
+    writeUtf8(file, out.join(''));
+    return { file, files: kept.length, truncated: omitted.length > 0, omitted };
+}
+
+// Splits `git diff` output into one chunk per file, keyed by the new path.
+function splitGitDiff(text) {
+    const chunks = [];
+    for (const part of String(text).split(/^(?=diff --git )/m)) {
+        if (!part.startsWith('diff --git ')) continue;
+        const m = part.match(/^diff --git a\/.+? b\/(.+)$/m);
+        chunks.push({ path: m ? m[1] : '?', text: part });
+    }
+    return chunks;
+}
+
 async function main() {
     const args = parseCli('get-review-target', {
         'kind': { type: 'string', required: true },
@@ -109,6 +227,7 @@ async function main() {
         'repo-root': { type: 'string', default: process.cwd() },
         'collection-url': { type: 'string' },
         'force': { type: 'boolean', default: false },
+        'no-fix-check': { type: 'boolean', default: false },
     });
     const kind = args.kind;
     if (!['pr', 'changeset'].includes(kind)) throw new Error("get-review-target: --kind must be 'pr' or 'changeset'.");
@@ -123,7 +242,7 @@ async function main() {
     enterReviewLock({ kind, id, outDir, force: args.force });
     // From here on, any failure releases the lock this run holds.
     try {
-        await buildTarget({ kind, id, outDir, repoRoot, collectionUrl: args['collection-url'], pat });
+        await buildTarget({ kind, id, outDir, repoRoot, collectionUrl: args['collection-url'], pat, fixCheck: !args['no-fix-check'] });
     }
     catch (e) {
         exitReviewLock(outDir);
@@ -131,7 +250,7 @@ async function main() {
     }
 }
 
-async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat }) {
+async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat, fixCheck = true }) {
     const runRoot = path.dirname(outDir);
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     for (const name of fs.readdirSync(runRoot)) {
@@ -161,6 +280,8 @@ async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat }) {
     const files = [];
     const assets = [];
     let target;
+    // How to get the linked work item ids and the full diff, set by each source below.
+    let fixSource = null;
     let translationPaths = [];
     let readTranslation;
 
@@ -232,6 +353,36 @@ async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat }) {
             }
         }
         readTranslation = async (p) => utf8BytesToText(await tfsBytes(itemUri(p, id), pat));
+
+        fixSource = {
+            workItemIds: async () => workItems,
+            // TFVC has no diff endpoint: diff each changed text file's previous and new version locally.
+            diffChunks: async () => {
+                const chunks = [];
+                const candidates = changes.filter((c) => !isAssetFile(c.serverPath) && !DIFF_NOISE_PATTERN.test(slashes(c.serverPath)));
+                if (candidates.length > MAX_CHANGESET_DIFF_FILES) {
+                    warn(`get-review-target: ${candidates.length} files changed; the fix check diff covers the first ${MAX_CHANGESET_DIFF_FILES}.`);
+                }
+                for (const change of candidates.slice(0, MAX_CHANGESET_DIFF_FILES)) {
+                    const isDelete = /delete/i.test(change.changeType);
+                    const isAdd = /\badd\b|branch|undelete/i.test(change.changeType);
+                    const oldPath = change.sourceServerPath || change.serverPath;
+                    let oldText = '';
+                    let newText = '';
+                    try { if (!isAdd) oldText = utf8BytesToText(await tfsBytes(itemUri(oldPath, id - 1), pat)); } catch { /* new in this changeset */ }
+                    try { if (!isDelete) newText = utf8BytesToText(await tfsBytes(itemUri(change.serverPath, id), pat)); } catch { /* unreadable */ }
+                    const oldFile = joinPath(tempDir, 'fix-old.txt');
+                    const newFile = joinPath(tempDir, 'fix-new.txt');
+                    writeUtf8(oldFile, oldText);
+                    writeUtf8(newFile, newText);
+                    const diff = git(['-c', 'core.autocrlf=false', 'diff', '--no-index', '--no-color', '-U3', '--ignore-cr-at-eol', '--', oldFile, newFile]);
+                    const body = outputLines(diff).filter((l) => !/^(diff --git|index |--- |\+\+\+ )/.test(l)).join('\n');
+                    if (!body.trim()) continue;
+                    chunks.push({ path: change.serverPath, text: `diff --git a${oldPath} b${change.serverPath}\n--- a${oldPath}\n+++ b${change.serverPath}\n${body}\n` });
+                }
+                return chunks;
+            },
+        };
 
         target = {
             kind: 'changeset',
@@ -313,6 +464,15 @@ async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat }) {
             .filter((p) => p && isTranslationFile(p));
         readTranslation = async (p) => utf8BytesToText(git(['-C', repoRoot, 'show', `${head}:${p}`], { encoding: 'buffer' }).stdout);
 
+        fixSource = {
+            workItemIds: () => getPullRequestWorkItemIds({
+                collectionUrl: remote.collectionUrl, project: remote.project, repositoryName: remote.repositoryName,
+                pullRequestId: id, pat,
+            }),
+            // Every file, not only UI: a fix often lives in a service, an API or a config file.
+            diffChunks: async () => splitGitDiff(git(['-C', repoRoot, '-c', 'core.quotepath=false', 'diff', '--no-color', '-M', '-U3', '--ignore-cr-at-eol', base, head]).stdout),
+        };
+
         target = {
             kind: 'pr',
             id,
@@ -349,14 +509,45 @@ async function buildTarget({ kind, id, outDir, repoRoot, collectionUrl, pat }) {
     target.translations = translations;
     target.assets = assets;
 
+    // Fix check context. A failure here never stops the UI review: it is recorded and the check is skipped.
+    target.fixWorkItems = [];
+    target.figmaLinks = [];
+    target.fullDiff = null;
+    if (fixCheck && files.length > 0 && fixSource) {
+        try {
+            const ids = await fixSource.workItemIds();
+            target.fixWorkItems = await exportFixWorkItems({ outDir, collectionUrl: target.collectionUrl, ids, pat });
+            target.figmaLinks = [...new Set(target.fixWorkItems.flatMap((w) => w.figmaLinks))];
+            if (target.fixWorkItems.length === 0) {
+                target.fixCheckSkipped = ids.length === 0 ? 'no linked work item' : 'no linked Bug or User Story';
+            }
+            else {
+                target.fullDiff = writeFullDiff(outDir, await fixSource.diffChunks(), target.fixWorkItems);
+            }
+        }
+        catch (e) {
+            warn(`get-review-target: fix check context unavailable (${e.message}); the fix check will be skipped.`);
+            target.fixWorkItems = [];
+            target.fullDiff = null;
+            target.fixCheckSkipped = 'work items could not be read';
+            target.workItemsError = e.message;
+        }
+    }
+    else if (!fixCheck) {
+        target.fixCheckSkipped = 'turned off (--no-fix-check)';
+    }
+
     fs.rmSync(tempDir, { recursive: true, force: true });
     const targetFile = joinPath(outDir, 'target.json');
     writeUtf8(targetFile, JSON.stringify(target, null, 4));
     // Nothing to review means the review ends here, so it doesn't keep the lock.
     if (files.length === 0) exitReviewLock(outDir);
-    process.stdout.write(`Review target: ${target.kind} ${id} - ${files.length} UI file(s) in scope, ${translations.length} translation file(s) for context -> ${targetFile}\n`);
+    const fixNote = target.fixWorkItems.length > 0
+        ? `, fix check: ${target.fixWorkItems.length} work item(s), ${target.fullDiff.files} file(s) in the diff${target.fullDiff.truncated ? ' (truncated)' : ''}`
+        : (target.fixCheckSkipped ? `, fix check skipped: ${target.fixCheckSkipped}` : '');
+    process.stdout.write(`Review target: ${target.kind} ${id} - ${files.length} UI file(s) in scope, ${translations.length} translation file(s) for context${fixNote} -> ${targetFile}\n`);
 }
 
 if (require.main === module) run(main);
 
-module.exports = { fileRole, isAssetFile, safeFileName, changedLineRanges, wholeFileRange };
+module.exports = { fileRole, isAssetFile, safeFileName, changedLineRanges, wholeFileRange, htmlToText, redactSecrets, workItemMarkdown, writeFullDiff, splitGitDiff, figmaLinksIn };

@@ -13,6 +13,10 @@ It reviews **only the changed lines** of UI files against five rule sets:
 | Images and assets (image size and loading, fonts, video, asset paths) | `PERF-xx` | [`rules/performance.md`](rules/performance.md) |
 | Accessibility (Angular and Razor) | `A11Y-*` | five area agents from accessibility-framework v1.2.0, bundled in [`agents`](agents) and [`references`](references) |
 
+It also runs a **fix check** (`FIX-xx`, [`rules/fix.md`](rules/fix.md)): it reads the Bugs and User
+Stories linked to the PR or changeset and judges, from the diff of **every** changed file, whether
+the change does what they ask. See [Fix check](#fix-check).
+
 Nothing is posted until you approve the preview. Everything the review needs ships inside this plugin.
 
 ## Requirements
@@ -64,14 +68,69 @@ The bundled AXIS skill shows up as `ui-code-review:axis-scss`, and the accessibi
 ## Use
 
 ```
-/ui-code-review:review pr <id> [--dry-run]
-/ui-code-review:review changeset <id> [--collection <url>] [--dry-run]
+/ui-code-review:review pr <id> [--dry-run] [--no-fix-check] [--verify-runtime <url>] [--figma <frame url>]
+/ui-code-review:review changeset <id> [--collection <url>] [--dry-run] [--no-fix-check] [--verify-runtime <url>] [--figma <frame url>]
 ```
 
 - Run `pr` from inside the repository's local clone.
 - For `changeset`, the collection comes from `--collection`, else `UI_REVIEW_TFVC_COLLECTION`, else the
   review asks once.
 - `--dry-run` shows the preview and stops.
+- `--no-fix-check` skips the fix check.
+- `--verify-runtime <url>` also tries, in the browser, the work items the code alone couldn't settle,
+  on an app you already run at `<url>`.
+- `--figma <frame url>` also compares the page with one Figma frame. It needs `--verify-runtime`.
+  Without it, the review never judges the design.
+
+## Fix check
+
+1. **Collect.** `get-review-target.js` reads the work items linked to the PR (or changeset). It keeps
+   only **Bug**, **User Story**, **Product Backlog Item** and **Requirement**; Tasks are skipped.
+   - Each work item becomes `workitems/<id>.md`, holding its description, repro steps and acceptance
+     criteria as plain text.
+   - Values labelled password, token, OTP, PIN or `كلمة المرور` are replaced with `[redacted]`.
+   - The diff of every changed file (not only UI) goes to `full.diff`, capped at 3,000 lines. Files
+     whose path shares a word with the work item title go first, and the files that don't fit are
+     listed at the end.
+2. **Judge.** `reviewer-fix` gives each work item one of these statuses: `Fixed`, `Partial`,
+   `SymptomOnly`, `NotAddressed` or `Unclear`. It checks every expectation and gives a `path:line` as
+   evidence. Inline comments come only from a concrete gap on a changed line:
+   - `FIX-01`: an expectation is not implemented.
+   - `FIX-02`: the change hides the symptom instead of fixing the cause.
+   - `FIX-03`: no test for the reported case.
+3. **Runtime (optional, `--verify-runtime <url>`).** For the work items the code couldn't settle, the
+   session follows the steps in the browser on the app you already run.
+   - **Before you start:** run the app on the PR's branch and sign in yourself. The review never
+     builds, starts a server, signs in or types a password.
+   - **How it stays fast:** it plans first, without the browser: the route, the selector from the
+     changed line, and the value to check. Then each page takes one round trip: navigate, wait for the
+     element, and one JavaScript assertion such as `getComputedStyle(el).direction`. It sets the
+     language once per run and takes no full-page screenshots.
+   - **Limits:** at most 8 browser calls per work item, and it never saves, deletes or sends data
+     without your yes. The summary shows the calls and seconds it took.
+4. **Figma (optional, `--figma <frame url>`).** Matching the design is opt-in. Without the flag, a
+   bug that says "doesn't match the design" is judged on what the change does to that screen, and the
+   missing design never makes it `Unclear`. With the flag:
+   - The session reads the frame once (`get_metadata`, plus `get_variable_defs` when available) and
+     matches its layers to selectors.
+   - It reads the same values from the running page in one round trip per language: sizes within
+     ±2px, plus colours, fonts and font sizes.
+   - **Match** marks the design criterion met. **Mismatch** marks it not met, turns `Fixed` into
+     `Partial`, and lists the values that differ (+ `FIX-01` on the SCSS line, when it is a changed line).
+   - The link must point at **one frame**: right-click it and choose **Copy link to selection**. A
+     link to a whole page is too big to read.
+   - If a linked work item contains a Figma link and you didn't pass the flag, the review only tells
+     you so.
+5. **Report.** The summary comment opens with a "Fix check" section: the status of each work item, a
+   table of its criteria, and the runtime and Figma results.
+
+If there is no linked Bug or Story, or the work items can't be read, the fix check is skipped with a
+one-line note and the UI review runs as before.
+
+**Cost per PR, roughly:**
+- **Code check:** about 1–2 minutes and 30–80k tokens.
+- **Runtime check:** about 1 minute and 20–40k tokens per work item, for a check that the DOM can
+  answer. This is an estimate and hasn't been measured on a live app yet.
 
 ## How it works
 

@@ -18,9 +18,14 @@
     findings.json: [ { ruleId, severity (Error|Warning|Info), file, line, message, fix, reviewer } ]
       - file is exactly the `path` from target.json; line is 1-based on the new side.
 
+    fix-verdict.json (next to target.json, from merge-findings.js, optional): the fix check verdict per
+    linked work item. It opens the summary as a "Fix check" section and is part of the review signature,
+    so a changed verdict posts a new summary. When it is missing, target.fixCheckSkipped (if set) is
+    shown as one line instead.
+
     Comment selection:
       - every Error and every Warning gets its own inline comment where it is (at most --max-warnings
-        Warnings, chosen by priority: security, accessibility, localization, AXIS, images and assets,
+        Warnings, chosen by priority: security, fix check, accessibility, localization, AXIS, images and assets,
         then any other, one per rule in turn;
         the rest are listed in the summary only); Info goes to the summary only;
       - findings on the same line are merged into one comment.
@@ -34,6 +39,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const { parseCli, warn, run } = require('../common/cli');
 const { getTfsPat, tfsJson } = require('../common/tfs-auth');
@@ -45,6 +51,8 @@ const {
 const SEVERITY_RANK = { error: 0, warning: 1, info: 2 };
 const SEVERITY_NAME = { error: 'Error', warning: 'Warning', info: 'Info' };
 const MARKER = 'ui-review';
+const FIX_STATUS_ICON = { Fixed: '✅', Partial: '🟡', SymptomOnly: '⚠️', NotAddressed: '❌', Unclear: '❔' };
+const CRITERION_ICON = { yes: '✅', no: '❌', unclear: '❔' };
 // StringBuilder.AppendLine on Windows: the summary has always used \r\n.
 const EOL = '\r\n';
 
@@ -135,7 +143,7 @@ async function main() {
     // images and assets, then any other, taking one finding per rule in turn so a single repeated rule
     // can't fill every slot.
     const inline = kept.filter((k) => k.severityKey === 'error');
-    const RULE_FAMILY_ORDER = [/^SEC-/i, /^A11Y-/i, /^I18N-/i, /^R-/i, /^PERF-/i];
+    const RULE_FAMILY_ORDER = [/^SEC-/i, /^FIX-/i, /^A11Y-/i, /^I18N-/i, /^R-/i, /^PERF-/i];
     const ruleFamilyRank = (ruleId) => {
         const i = RULE_FAMILY_ORDER.findIndex((re) => re.test(ruleId));
         return i < 0 ? RULE_FAMILY_ORDER.length : i;
@@ -182,8 +190,53 @@ async function main() {
     for (const f of kept) counts[f.severityKey]++;
     const fileCount = targetFiles.length;
 
+    // Fix check (merge-findings.js writes fix-verdict.json when reviewer-fix ran): goes first in the summary.
+    const verdictFile = joinPath(outDir, 'fix-verdict.json');
+    const fixVerdict = fs.existsSync(verdictFile) ? jsonItems(JSON.parse(readAllText(verdictFile))) : [];
+    const cell = (s) => psString(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    const fixMd = [];
+    if (fixVerdict.length > 0) {
+        fixMd.push('### Fix check', '');
+        for (const v of fixVerdict) {
+            const label = `${psString(v.type) || 'Work item'} ${v.workItem}${v.title ? `: ${cell(v.title)}` : ''}`;
+            fixMd.push(`${FIX_STATUS_ICON[v.status] || '❔'} **${v.status}** — ${label}`, '');
+            if (v.summary) fixMd.push(cell(v.summary), '');
+            const criteria = jsonItems(v.criteria);
+            if (criteria.length > 0) {
+                fixMd.push('| Met | Expected | Evidence |', '|---|---|---|');
+                for (const c of criteria) fixMd.push(`| ${CRITERION_ICON[c.met] || '❔'} | ${cell(c.text)} | ${c.evidence ? `\`${cell(c.evidence)}\`` : ''} |`);
+                fixMd.push('');
+            }
+            if (v.runtime) {
+                const cost = [v.runtime.actions != null ? `${v.runtime.actions} browser actions` : '', v.runtime.seconds != null ? `${v.runtime.seconds}s` : ''].filter(Boolean).join(', ');
+                fixMd.push(`Runtime check: **${v.runtime.result}**${v.runtime.step ? ` at "${cell(v.runtime.step)}"` : ''}${v.runtime.observed ? ` — ${cell(v.runtime.observed)}` : ''}${cost ? ` (${cost})` : ''}`, '');
+            }
+            else if (v.runtimeCheck === 'needed') {
+                fixMd.push('Needs a check in the running app (`--verify-runtime <url>`).', '');
+            }
+            if (v.figma) {
+                const checks = jsonItems(v.figma.checks);
+                const okCount = checks.filter((c) => c.ok).length;
+                const cost = [v.figma.actions != null ? `${v.figma.actions} calls` : '', v.figma.seconds != null ? `${v.figma.seconds}s` : ''].filter(Boolean).join(', ');
+                fixMd.push(`Figma check: **${v.figma.result}**${checks.length ? ` — ${okCount} of ${checks.length} values match` : ''}${cost ? ` (${cost})` : ''}`, '');
+                const failed = checks.filter((c) => !c.ok);
+                if (failed.length > 0) {
+                    fixMd.push('| Value | Design | App |', '|---|---|---|');
+                    for (const c of failed) fixMd.push(`| ${cell(c.what)} | ${cell(c.design)} | ${cell(c.app)} |`);
+                    fixMd.push('');
+                }
+            }
+        }
+    }
+    else if (target.fixCheckSkipped) {
+        fixMd.push(`_Fix check skipped: ${cell(target.fixCheckSkipped)}._`, '');
+    }
+    // Part of the review signature, so a changed verdict posts a new summary.
+    const verdictSig = fixVerdict.map((v) => `${v.workItem}:${v.status}:${v.runtime ? v.runtime.result : ''}:${jsonItems(v.criteria).map((c) => c.met).join('')}${v.figma ? `:figma-${v.figma.result}` : ''}`).join(';');
+
     const sb = [];
     sb.push(`## 🤖 UI Review — ${target.kind} ${target.id}`, '');
+    sb.push(...fixMd);
     if (kept.length === 0) {
         sb.push(`No findings on the changed lines of ${fileCount} UI file(s).`);
     }
@@ -200,11 +253,11 @@ async function main() {
             sb.push('', `${notInline} Warning(s) beyond the ${maxWarnings} highest-priority ones are listed here only, without an inline comment.`);
         }
     }
-    sb.push('', 'Rules: AXIS (`R-xx`), localization (`I18N-xx`), security (`SEC-xx`), images and assets (`PERF-xx`), accessibility (`A11Y-*`).');
-    // Review signature: changes only when the set of findings changes. A re-run with the same signature
-    // posts nothing new (summary and work item comment are skipped).
+    sb.push('', 'Rules: fix check (`FIX-xx`), AXIS (`R-xx`), localization (`I18N-xx`), security (`SEC-xx`), images and assets (`PERF-xx`), accessibility (`A11Y-*`).');
+    // Review signature: changes only when the set of findings or the fix verdict changes. A re-run with the
+    // same signature posts nothing new (summary and work item comment are skipped).
     const reviewKey = `${target.kind}-${target.id}`;
-    const reviewSig = fingerprint('review', reviewKey, kept.map((k) => k.fingerprint).sort().join(','));
+    const reviewSig = fingerprint('review', reviewKey, kept.map((k) => k.fingerprint).sort().join(',') + (verdictSig ? `|${verdictSig}` : ''));
     sb.push('', `<!-- ${MARKER}:summary:${reviewKey}:${reviewSig} -->`);
     const summary = sb.join(EOL) + EOL;
     const summaryPattern = new RegExp(`${MARKER}:summary:${regexEscape(reviewKey)}:([0-9a-f]{16})`, 'i');
@@ -215,6 +268,26 @@ async function main() {
     // HTML version of the summary for a work item's Discussion (System.History renders HTML, not markdown).
     // It is the only thing posted in the fallback, so it lists every finding (Errors first).
     let html = `<p><b>🤖 UI Review</b> — ${target.kind} <a href="${htmlEncode(target.webUrl)}">${target.id}</a></p>`;
+    if (fixVerdict.length > 0) {
+        html += '<p><b>Fix check</b></p><ul>';
+        for (const v of fixVerdict) {
+            html += `<li>${FIX_STATUS_ICON[v.status] || '❔'} <b>${htmlEncode(v.status)}</b> — ${htmlEncode(psString(v.type) || 'Work item')} ${v.workItem}${v.title ? `: ${htmlEncode(v.title)}` : ''}`;
+            if (v.summary) html += `<br>${htmlEncode(v.summary)}`;
+            const criteria = jsonItems(v.criteria);
+            if (criteria.length > 0) {
+                html += '<ul>' + criteria.map((c) => `<li>${CRITERION_ICON[c.met] || '❔'} ${htmlEncode(c.text)}${c.evidence ? ` <code>${htmlEncode(c.evidence)}</code>` : ''}</li>`).join('') + '</ul>';
+            }
+            if (v.runtime) html += `<br><i>Runtime check:</i> ${htmlEncode(v.runtime.result)}${v.runtime.observed ? ` — ${htmlEncode(v.runtime.observed)}` : ''}`;
+            if (v.figma) {
+                const checks = jsonItems(v.figma.checks);
+                html += `<br><i>Figma check:</i> ${htmlEncode(v.figma.result)} — ${checks.filter((c) => c.ok).length} of ${checks.length} values match`;
+                const failed = checks.filter((c) => !c.ok);
+                if (failed.length > 0) html += '<ul>' + failed.map((c) => `<li>${htmlEncode(c.what)}: app ${htmlEncode(c.app)}, design ${htmlEncode(c.design)}</li>`).join('') + '</ul>';
+            }
+            html += '</li>';
+        }
+        html += '</ul>';
+    }
     if (kept.length === 0) {
         html += `<p>No findings on the changed lines of ${fileCount} UI file(s).</p>`;
     }

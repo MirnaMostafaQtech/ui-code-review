@@ -79,4 +79,43 @@ async function getTfvcChangesetChanges({ collectionUrl, changesetId, pat, top = 
     return changes;
 }
 
-module.exports = { getTfsRemoteInfo, getTfsPullRequest, getTfvcChangesetChanges };
+/*
+    The ids of the work items linked to a Pull Request.
+*/
+async function getPullRequestWorkItemIds({ collectionUrl, project, repositoryName, pullRequestId, pat }) {
+    const repoBase = `${collectionUrl}/${escapeDataString(project)}`;
+    const uri = `${repoBase}/_apis/git/repositories/${escapeDataString(repositoryName)}/pullrequests/${pullRequestId}/workitems?api-version=5.0`;
+    const reply = await tfsJson('GET', uri, pat);
+    return ((reply && reply.value) || []).map((w) => Number(w.id)).filter((n) => Number.isInteger(n));
+}
+
+/*
+    The fields the fix check needs, for up to 200 work items in one call:
+    { id, type, title, state, description, reproSteps, acceptanceCriteria } (HTML as stored).
+*/
+const WORK_ITEM_FIELDS = [
+    'System.WorkItemType', 'System.Title', 'System.State', 'System.Description',
+    'Microsoft.VSTS.TCM.ReproSteps', 'Microsoft.VSTS.Common.AcceptanceCriteria',
+];
+async function getWorkItems({ collectionUrl, ids, pat }) {
+    if (!ids || ids.length === 0) return [];
+    const uri = `${collectionUrl}/_apis/wit/workitems?ids=${ids.slice(0, 200).join(',')}&fields=${WORK_ITEM_FIELDS.join(',')}&errorPolicy=omit&api-version=5.0`;
+    const reply = await tfsJson('GET', uri, pat);
+    const items = [];
+    for (const wi of (reply && reply.value) || []) {
+        if (!wi || !wi.fields) continue;
+        const f = wi.fields;
+        items.push({
+            id: wi.id,
+            type: psString(f['System.WorkItemType']),
+            title: psString(f['System.Title']),
+            state: psString(f['System.State']),
+            description: psString(f['System.Description']),
+            reproSteps: psString(f['Microsoft.VSTS.TCM.ReproSteps']),
+            acceptanceCriteria: psString(f['Microsoft.VSTS.Common.AcceptanceCriteria']),
+        });
+    }
+    return items;
+}
+
+module.exports = { getTfsRemoteInfo, getTfsPullRequest, getTfvcChangesetChanges, getPullRequestWorkItemIds, getWorkItems };

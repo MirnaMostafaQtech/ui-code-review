@@ -7,7 +7,7 @@
     {
       "name": "ui-code-review",
       "source": "./",
-      "description": "UI code review for Git Pull Requests and TFVC changesets: AXIS, localization, UI security, images and assets, and accessibility rules, posted as comments."
+      "description": "UI code review for Git Pull Requests and TFVC changesets: AXIS, localization, UI security, images and assets, and accessibility rules, plus a fix check against the linked Bug / User Story, posted as comments."
     }
   ]
 }

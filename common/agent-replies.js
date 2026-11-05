@@ -33,6 +33,7 @@ const REVIEWER_AGENTS = {
     'a11y-aria': 'accessibility-aria',
     'a11y-semantics': 'accessibility-semantics',
     'a11y-keyboard': 'accessibility-keyboard',
+    'fix': 'reviewer-fix',
 };
 
 function projectsDir() {
